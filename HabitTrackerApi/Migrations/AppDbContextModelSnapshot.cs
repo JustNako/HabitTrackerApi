@@ -99,6 +99,21 @@ namespace HabitTrackerApi.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("RepeatDaysOfMonth")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RepeatDaysOfWeek")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("RepeatPeriod")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RepeatTimesPerPeriod")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RepeatType")
+                        .HasColumnType("int");
+
                     b.Property<int>("TargetDays")
                         .HasColumnType("int");
 
@@ -131,6 +146,9 @@ namespace HabitTrackerApi.Migrations
 
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 

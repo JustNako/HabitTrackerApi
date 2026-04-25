@@ -1,4 +1,6 @@
-﻿public class HabitStatsDto
+﻿using HabitTrackerApi.Migrations;
+
+public class HabitStatsDto
 {
     public int TotalDaysTracked { get; set; }
     public int CompletedDays { get; set; }
@@ -8,4 +10,5 @@
     public int LongestStreak { get; set; }
 
     public bool IsCompletedToday { get; set; }
+
 }

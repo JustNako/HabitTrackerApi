@@ -60,7 +60,7 @@ namespace HabitTrackerApi.Controllers
             return Ok(new { token });
         }
 
-
+        
         [HttpDelete("delete")]
         public async Task<IActionResult> DeleteAccount([FromBody] LoginRequest request)
         {

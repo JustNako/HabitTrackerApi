@@ -7,7 +7,6 @@ using HabitTrackerApi.DTOs;
 using HabitTrackerApi.Entities;
 using HabitTrackerApi.Repositories;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 
 namespace HabitTrackerApi.Services;
 
@@ -32,18 +31,30 @@ public class HabitService
             Id = h.Id,
             Title = h.Title,
             TargetDays = h.TargetDays,
-            CompletedDays = h.Logs.Count(l => l.IsCompleted)
+            CompletedDays = h.Logs.Count(l => l.IsCompleted),
+            RepeatType = h.RepeatType,
+            RepeatDaysOfWeek = ParseDayOfWeekCsv(h.RepeatDaysOfWeek),
+            RepeatDaysOfMonth = ParseIntCsv(h.RepeatDaysOfMonth),
+            RepeatTimesPerPeriod = h.RepeatTimesPerPeriod,
+            RepeatPeriod = h.RepeatPeriod
         }).ToList();
     }
 
     public async Task CreateHabit(string userId, CreateHabitDto dto)
     {
+        ValidateRepeatSettings(dto);
+
         var habit = new Habit
         {
             Id = Guid.NewGuid(),
             Title = dto.Title,
             Description = dto.Description,
             TargetDays = dto.TargetDays,
+            RepeatType = dto.RepeatType,
+            RepeatDaysOfWeek = ToDayOfWeekCsv(dto.RepeatDaysOfWeek),
+            RepeatDaysOfMonth = ToIntCsv(dto.RepeatDaysOfMonth),
+            RepeatTimesPerPeriod = dto.RepeatTimesPerPeriod,
+            RepeatPeriod = dto.RepeatPeriod,
             UserId = userId
         };
 
@@ -68,18 +79,16 @@ public class HabitService
 
     //HabitLogs
 
-    public async Task ToggleTodayHabit(Guid habitId, string userId)
+    public async Task<bool> ToggleHabit(string userId, Guid habitId, string? note)
     {
+        var habitExists = await _context.Habits.AnyAsync(h => h.Id == habitId && h.UserId == userId);
+        if (!habitExists)
+            return false;
+
         var today = DateTime.UtcNow.Date;
 
-        var habit = await _context.Habits
-            .FirstOrDefaultAsync(h => h.Id == habitId && h.UserId == userId);
-
-        if (habit == null)
-            throw new Exception("Habit not found");
-
         var log = await _context.HabitLogs
-            .FirstOrDefaultAsync(l => l.HabitId == habitId && l.Date == today);
+            .FirstOrDefaultAsync(x => x.HabitId == habitId && x.Date == today);
 
         if (log == null)
         {
@@ -88,7 +97,8 @@ public class HabitService
                 Id = Guid.NewGuid(),
                 HabitId = habitId,
                 Date = today,
-                IsCompleted = true
+                IsCompleted = true,
+                Note = note
             };
 
             _context.HabitLogs.Add(log);
@@ -96,11 +106,14 @@ public class HabitService
         else
         {
             log.IsCompleted = !log.IsCompleted;
+
+            // 🔥 обновляем note
+            if (!string.IsNullOrWhiteSpace(note))
+                log.Note = note;
         }
 
         await _context.SaveChangesAsync();
-
-
+        return true;
     }
 
 
@@ -210,5 +223,158 @@ public class HabitService
         }
 
         return longest;
+    }
+
+
+    public async Task<List<HabitHeatmapDto>> GetHeatmap(Guid habitId, string userId)
+    {
+        var startDate = DateTime.UtcNow.Date.AddDays(-30);
+        var endDate = DateTime.UtcNow.Date;
+
+        var logs = await _context.HabitLogs
+            .Where(l => l.HabitId == habitId && l.Date >= startDate && l.Date <= endDate)
+            .ToListAsync();
+
+        var result = new List<HabitHeatmapDto>();
+
+        for (var date = startDate; date  <= endDate; date = date.AddDays(1))
+        {
+            var log = logs.FirstOrDefault(l => l.Date == date);
+
+            result.Add(new HabitHeatmapDto
+            {
+                Date = date,
+                Value = log != null && log.IsCompleted ? 1 : 0
+            });
+        }
+
+        return result;
+    }
+
+    private static void ValidateRepeatSettings(CreateHabitDto dto)
+    {
+        switch (dto.RepeatType)
+        {
+            case HabitRepeatType.EveryDay:
+                break;
+
+
+            case HabitRepeatType.SpecificDaysOfWeek:
+                if (dto.RepeatDaysOfWeek == null || dto.RepeatDaysOfWeek.Count == 0)
+                    throw new ArgumentException("RepeatDaysOfWeek is required.");
+
+                if (dto.RepeatDaysOfWeek.Count > 7)
+                    throw new ArgumentException("Cannot select more than 7 days of week.");
+
+                if (dto.RepeatDaysOfWeek.Distinct().Count() != dto.RepeatDaysOfWeek.Count)
+                    throw new ArgumentException("Duplicate days of week are not allowed.");
+
+                break;
+
+
+            case HabitRepeatType.SpecificDaysOfMonth:
+                if (dto.RepeatDaysOfMonth == null || dto.RepeatDaysOfMonth.Count == 0)
+                    throw new ArgumentException("RepeatDaysOfMonth is required.");
+
+                if (dto.RepeatDaysOfMonth.Any(day => day < 1 || day > 31))
+                    throw new ArgumentException("Days of month must be between 1 and 31.");
+
+                ValidateDaysInMonth(dto.RepeatDaysOfMonth);
+
+                if (dto.RepeatDaysOfMonth.Distinct().Count() != dto.RepeatDaysOfMonth.Count)
+                    throw new ArgumentException("Duplicate days of month are not allowed.");
+
+                break;
+
+
+
+            case HabitRepeatType.XTimesPerPeriod:
+
+                if (dto.RepeatTimesPerPeriod is null || dto.RepeatTimesPerPeriod <= 0)
+                    throw new ArgumentException("RepeatTimesPerPeriod must be > 0.");
+
+                if (dto.RepeatPeriod is null)
+                    throw new ArgumentException("RepeatPeriod is required.");
+
+                if (dto.RepeatPeriod == HabitRepeatPeriod.Week)
+                {
+                    if (dto.RepeatTimesPerPeriod > 7 || dto.RepeatTimesPerPeriod < 1)
+                        throw new ArgumentException("Cannot be more than 7 times per week.");
+                }
+
+                if (dto.RepeatPeriod == HabitRepeatPeriod.Month)
+                {
+                    if (dto.RepeatTimesPerPeriod > 31 || dto.RepeatTimesPerPeriod < 1)
+                        throw new ArgumentException("Cannot be more than 31 times per month.");
+                }
+
+                break;
+
+
+            default:
+                throw new ArgumentException("Unsupported RepeatType.");
+        }
+    }
+
+
+    private static void ValidateDaysInMonth(List<int> days)
+    {
+        var currentYear = DateTime.UtcNow.Year;
+        var currentMonth = DateTime.UtcNow.Month;
+
+        int daysInMonth = DateTime.DaysInMonth(currentYear, currentMonth);
+
+        if (days.Any(d => d > daysInMonth))
+            throw new ArgumentException($"This month has only {daysInMonth} days.");
+    }
+    private static string? ToDayOfWeekCsv(IEnumerable<DayOfWeek>? values)
+    {
+        if (values == null)
+            return null;
+
+        var items = values
+            .Distinct()
+            .OrderBy(v => (int)v)
+            .Select(v => ((int)v).ToString());
+
+        var result = string.Join(",", items);
+        return string.IsNullOrWhiteSpace(result) ? null : result;
+    }
+
+    private static List<DayOfWeek>? ParseDayOfWeekCsv(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(int.Parse)
+            .Select(v => (DayOfWeek)v)
+            .ToList();
+    }
+
+    private static string? ToIntCsv(IEnumerable<int>? values)
+    {
+        if (values == null)
+            return null;
+
+        var items = values
+            .Distinct()
+            .OrderBy(v => v)
+            .Select(v => v.ToString());
+
+        var result = string.Join(",", items);
+        return string.IsNullOrWhiteSpace(result) ? null : result;
+    }
+
+    private static List<int>? ParseIntCsv(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(int.Parse)
+            .ToList();
     }
 }

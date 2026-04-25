@@ -53,21 +53,31 @@ public class HabitsController : ControllerBase
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized(new { message = "User identifier not found in token." });
 
-        await _service.CreateHabit(userId, dto);
+        try
+        {
+            await _service.CreateHabit(userId, dto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         return Ok();
     }
 
 
 
+    [Authorize]
     [HttpPost("{id}/toggle")]
-    public async Task<IActionResult> ToggleHabit(Guid id)
+    public async Task<IActionResult> Toggle(Guid id, [FromBody] ToggleHabitLogDto dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        await _service.ToggleTodayHabit(id, userId);
+        var success = await _service.ToggleHabit(userId, id, dto.Note);
+        if (!success)
+            return NotFound(new { message = "Habit not found or access denied." });
 
-        return Ok(new {message = "Toggled"});
+        return Ok();
     }
 
 
@@ -80,6 +90,16 @@ public class HabitsController : ControllerBase
         var streak = await _service.GetStreak(id, userId);
 
         return Ok(new { streak });
+    }
+
+    [HttpGet("{id}/heatmap")]
+    public async Task<IActionResult> HeatMap(Guid id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var heatmap = await _service.GetHeatmap(id, userId);
+
+        return Ok(heatmap);
     }
 
 
