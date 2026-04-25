@@ -8,7 +8,8 @@ namespace HabitTrackerApi.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v{version:apiVersion}/habits")]
+[ApiVersion("1.0")]
 public class HabitsController : ControllerBase
 {
     private readonly HabitService _service;

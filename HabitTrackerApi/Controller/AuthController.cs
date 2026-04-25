@@ -9,7 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 namespace HabitTrackerApi.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/auth")]
+    [ApiVersion("1.0")]
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _config;
