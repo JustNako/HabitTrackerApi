@@ -6,7 +6,7 @@ namespace HabitTrackerApi.Entities;
 public class Habit
 {
     public Guid Id { get; set; }
-    public string Title {get;set;}
+    public required string Title { get; set; }
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public int TargetDays { get; set; }
@@ -15,7 +15,10 @@ public class Habit
     public string? RepeatDaysOfMonth { get; set; }
     public int? RepeatTimesPerPeriod { get; set; }
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
-    public string UserId { get; set; }
-    public ApplicationUser User { get; set; }
-    public List<HabitLog> Logs { get; set; }
+    public required string UserId { get; set; }
+    public ApplicationUser User { get; set; } = null!;
+    public List<HabitLog> Logs { get; set; } = [];
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsDeleted { get; set; } = false;
 }

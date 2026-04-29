@@ -123,10 +123,16 @@ builder.Services.AddAuthorization();
 // DI
 builder.Services.AddScoped<IHabitRepository, HabitRepository>();
 builder.Services.AddScoped<HabitService>();
+builder.Services.AddScoped<SyncService>();
+
+builder.Services.AddExceptionHandler<HabitTrackerApi.Middleware.GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
 // Pipeline
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

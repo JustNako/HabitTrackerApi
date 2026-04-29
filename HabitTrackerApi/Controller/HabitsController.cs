@@ -1,3 +1,4 @@
+using HabitTrackerApi.Common;
 using HabitTrackerApi.DTOs;
 using HabitTrackerApi.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -25,11 +26,11 @@ public class HabitsController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { message = "User identifier not found in token." });
+            return Unauthorized(new { error = new Error("Auth", "User identifier not found in token.") });
 
-        var habits = await _service.GetUserHabits(userId);
+        var result = await _service.GetUserHabits(userId);
 
-        return Ok(habits);
+        return Ok(result.Value);
     }
 
     [HttpGet("{id}/stats")]
@@ -37,12 +38,17 @@ public class HabitsController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var stats = await _service.GetHabitStats(id, userId);
+        var result = await _service.GetHabitStats(id, userId);
 
-        if (stats == null)
-            return NotFound(new { message = "Habit not found or you don't have permission to view it." });
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
 
-        return Ok(stats);
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost]
@@ -52,16 +58,12 @@ public class HabitsController : ControllerBase
                      ?? User.FindFirst(ClaimTypes.Name)?.Value;
 
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { message = "User identifier not found in token." });
+            return Unauthorized(new { error = new Error("Auth", "User identifier not found in token.") });
 
-        try
-        {
-            await _service.CreateHabit(userId, dto);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await _service.CreateHabit(userId, dto);
+        
+        if (result.IsFailure)
+            return BadRequest(new { error = result.Error });
 
         return Ok();
     }
@@ -74,9 +76,15 @@ public class HabitsController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var success = await _service.ToggleHabit(userId, id, dto.Note);
-        if (!success)
-            return NotFound(new { message = "Habit not found or access denied." });
+        var result = await _service.ToggleHabit(userId, id, dto.Note);
+        
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
 
         return Ok();
     }
@@ -88,9 +96,17 @@ public class HabitsController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var streak = await _service.GetStreak(id, userId);
+        var result = await _service.GetStreak(id, userId);
+        
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
 
-        return Ok(new { streak });
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(new { streak = result.Value });
     }
 
     [HttpGet("{id}/heatmap")]
@@ -98,9 +114,17 @@ public class HabitsController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var heatmap = await _service.GetHeatmap(id, userId);
+        var result = await _service.GetHeatmap(id, userId);
+        
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
 
-        return Ok(heatmap);
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(result.Value);
     }
 
 
@@ -111,12 +135,14 @@ public class HabitsController : ControllerBase
 
         var result = await _service.DeleteHabit(id, userId);
 
-        if (!result)
-            return NotFound(new { message = "Habit not found or you don't have permission to delete it." });
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
 
         return Ok();
     }
-
-
-    
 }

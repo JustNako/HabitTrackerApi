@@ -14,4 +14,5 @@ public class HabitDto
     public List<int>? RepeatDaysOfMonth { get; set; }
     public int? RepeatTimesPerPeriod { get; set; }
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
+    public bool IsCompletedToday { get; set; }
 }

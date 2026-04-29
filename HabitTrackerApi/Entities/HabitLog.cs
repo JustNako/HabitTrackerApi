@@ -11,4 +11,7 @@ public class HabitLog
     public DateTime Date {get;set;}
     public bool IsCompleted {get;set;}
     public string? Note {get;set;}
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsDeleted { get; set; } = false;
 }
