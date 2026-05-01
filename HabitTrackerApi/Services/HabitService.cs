@@ -42,7 +42,8 @@ public class HabitService
             RepeatDaysOfMonth = ParseIntCsv(h.RepeatDaysOfMonth),
             RepeatTimesPerPeriod = h.RepeatTimesPerPeriod,
             RepeatPeriod = h.RepeatPeriod,
-            IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == DateTime.UtcNow.Date)
+            IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == DateTime.UtcNow.Date),
+            IsPublic = h.IsPublic
         }).ToList();
 
         return Result.Success(dtos);
@@ -76,6 +77,7 @@ public class HabitService
             RepeatDaysOfMonth = ToIntCsv(dto.RepeatDaysOfMonth),
             RepeatTimesPerPeriod = dto.RepeatTimesPerPeriod,
             RepeatPeriod = dto.RepeatPeriod,
+            IsPublic = dto.IsPublic,
             UserId = userId
         };
 
@@ -101,6 +103,20 @@ public class HabitService
 
 
     //HabitLogs
+
+    public async Task<Result> ToggleVisibility(string userId, Guid habitId)
+    {
+        var habit = await _context.Habits.FirstOrDefaultAsync(h => h.Id == habitId && h.UserId == userId);
+        if (habit == null)
+            return Result.Failure(Error.NotFound);
+
+        habit.IsPublic = !habit.IsPublic;
+        habit.UpdatedAt = DateTime.UtcNow;
+        _context.Entry(habit).State = EntityState.Modified;
+        await _context.SaveChangesAsync();
+
+        return Result.Success();
+    }
 
     public async Task<Result> ToggleHabit(string userId, Guid habitId, string? note)
     {

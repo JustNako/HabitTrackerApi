@@ -124,6 +124,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IHabitRepository, HabitRepository>();
 builder.Services.AddScoped<HabitService>();
 builder.Services.AddScoped<SyncService>();
+builder.Services.AddScoped<FriendService>();
 builder.Services.AddHttpClient<AiService>();
 
 builder.Services.AddExceptionHandler<HabitTrackerApi.Middleware.GlobalExceptionHandler>();

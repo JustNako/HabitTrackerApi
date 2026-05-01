@@ -8,6 +8,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public DbSet<Habit> Habits {get;set;}
     public DbSet<HabitLog> HabitLogs {get;set;}
+    public DbSet<Friendship> Friendships {get;set;}
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -25,6 +26,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         modelBuilder.Entity<Habit>().HasQueryFilter(h => !h.IsDeleted);
         modelBuilder.Entity<HabitLog>().HasQueryFilter(l => !l.IsDeleted);
+
+        modelBuilder.Entity<Friendship>()
+            .HasOne(f => f.Requester)
+            .WithMany(u => u.SentRequests)
+            .HasForeignKey(f => f.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Friendship>()
+            .HasOne(f => f.Addressee)
+            .WithMany(u => u.ReceivedRequests)
+            .HasForeignKey(f => f.AddresseeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

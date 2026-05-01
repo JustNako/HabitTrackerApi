@@ -15,4 +15,5 @@ public class CreateHabitDto
     public List<int>? RepeatDaysOfMonth { get; set; }
     public int? RepeatTimesPerPeriod { get; set; }
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
+    public bool IsPublic { get; set; } = true;
 }

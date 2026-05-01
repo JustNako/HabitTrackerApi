@@ -36,7 +36,8 @@ namespace HabitTrackerApi.Controllers
             var user = new ApplicationUser
             {
                 UserName = dto.UserName,
-                Email = dto.Email
+                Email = dto.Email,
+                InviteCode = GenerateInviteCode(dto.UserName)
             };
 
             var result = await _userManager.CreateAsync(user, dto.Password);
@@ -141,10 +142,20 @@ namespace HabitTrackerApi.Controllers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        // ── helpers ──────────────────────────────────────────────────────────
+
+        private static string GenerateInviteCode(string username)
+        {
+            var prefix = username.Length >= 4
+                ? username[..4].ToUpper()
+                : username.ToUpper().PadRight(4, 'X');
+            var suffix = Guid.NewGuid().ToString("N")[..4].ToUpper();
+            return $"{prefix}-{suffix}";
+        }
     }
 
     // ── request DTO ──────────────────────────────────────────────────────────
 
     public record LoginRequest(string Username, string Password);
 }
-

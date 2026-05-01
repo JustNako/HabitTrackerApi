@@ -15,4 +15,5 @@ public class HabitDto
     public int? RepeatTimesPerPeriod { get; set; }
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
     public bool IsCompletedToday { get; set; }
+    public bool IsPublic { get; set; }
 }

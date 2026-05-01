@@ -23,4 +23,5 @@ public class Habit
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public bool IsDeleted { get; set; } = false;
+    public bool IsPublic { get; set; } = true;
 }

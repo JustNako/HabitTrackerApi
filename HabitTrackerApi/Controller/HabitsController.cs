@@ -91,6 +91,25 @@ public class HabitsController : ControllerBase
         return Ok();
     }
 
+    [Authorize]
+    [HttpPost("{id}/toggle-visibility")]
+    public async Task<IActionResult> ToggleVisibility(Guid id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var result = await _service.ToggleVisibility(userId, id);
+        
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok();
+    }
+
 
 
     [HttpGet("{id}/streak")]
