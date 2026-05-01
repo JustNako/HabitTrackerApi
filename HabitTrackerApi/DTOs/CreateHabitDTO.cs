@@ -1,10 +1,13 @@
+using System.ComponentModel.DataAnnotations;
 using HabitTrackerApi.Entities;
 
 namespace HabitTrackerApi.DTOs;
 
 public class CreateHabitDto
 {
-    public string Title { get; set; }
+    [Required(ErrorMessage = "Title is required.")]
+    [MaxLength(30, ErrorMessage = "Title must be 30 characters or fewer.")]
+    public string Title { get; set; }    
     public string? Description { get; set; }
     public int TargetDays { get; set; }
     public HabitRepeatType RepeatType { get; set; } = HabitRepeatType.EveryDay;

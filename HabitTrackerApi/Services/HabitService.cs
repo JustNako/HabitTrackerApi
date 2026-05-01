@@ -7,6 +7,7 @@ using HabitTrackerApi.Data;
 using HabitTrackerApi.DTOs;
 using HabitTrackerApi.Entities;
 using HabitTrackerApi.Repositories;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace HabitTrackerApi.Services;
@@ -15,12 +16,15 @@ public class HabitService
 {
     private readonly IHabitRepository _repo;
     private readonly AppDbContext _context;
-    
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly AiService _aiService;
 
-    public HabitService(IHabitRepository repo, AppDbContext context)
+    public HabitService(IHabitRepository repo, AppDbContext context, UserManager<ApplicationUser> userManager, AiService aiService)
     {
         _repo = repo;
         _context = context;
+        _userManager = userManager;
+        _aiService = aiService;
     }
 
     public async Task<Result<List<HabitDto>>> GetUserHabits(string userId)
@@ -44,12 +48,21 @@ public class HabitService
         return Result.Success(dtos);
     }
 
+    private const int FreeHabitLimit = 3;
+
     public async Task<Result> CreateHabit(string userId, CreateHabitDto dto)
     {
         var validationResult = ValidateRepeatSettings(dto);
         if (validationResult.IsFailure)
-        {
             return validationResult;
+
+        // ── Pro tier check ─────────────────────────────────────────────────
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user != null && !user.IsPro)
+        {
+            var existingCount = await _context.Habits.CountAsync(h => h.UserId == userId && !h.IsDeleted);
+            if (existingCount >= FreeHabitLimit)
+                return Result.Failure(new Error("ProRequired", $"Free plan is limited to {FreeHabitLimit} habits. Upgrade to Pro to add more."));
         }
 
         var habit = new Habit
@@ -159,6 +172,175 @@ public class HabitService
         return Result.Success(streak);
     }
 
+    public async Task<Result<int>> GetGlobalStreak(string userId)
+    {
+        var completedDates = await _context.HabitLogs
+            .Include(l => l.Habit)
+            .Where(l => l.Habit.UserId == userId && l.IsCompleted)
+            .Select(l => l.Date.Date)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToListAsync();
+
+        int streak = 0;
+        var expected = DateTime.UtcNow.Date;
+
+        foreach (var date in completedDates)
+        {
+            if (date == expected)
+            {
+                streak++;
+                expected = expected.AddDays(-1);
+            }
+            else if (date == expected.AddDays(-1) && streak == 0)
+            {
+                streak++;
+                expected = expected.AddDays(-2);
+            }
+            else if (date < expected)
+            {
+                break;
+            }
+        }
+
+        return Result.Success(streak);
+    }
+
+    public async Task<Result<GlobalStatsDto>> GetGlobalStats(string userId)
+    {
+        var habits = await _context.Habits.Where(h => h.UserId == userId).ToListAsync();
+        var logs = await _context.HabitLogs.Include(l => l.Habit).Where(l => l.Habit.UserId == userId && l.IsCompleted).ToListAsync();
+
+        int totalHabits = habits.Count;
+        int totalCompletions = logs.Count;
+        int globalStreak = (await GetGlobalStreak(userId)).Value;
+
+        // Completion Rate (simple % of completions per habit)
+        double completionRate = totalHabits == 0 ? 0 : Math.Round((double)totalCompletions / totalHabits, 2);
+
+        // Active Days – distinct dates with any completed habit
+        int activeDays = logs.Select(l => l.Date.Date).Distinct().Count();
+
+        // Best Streak – longest streak among all habits
+        int bestStreak = 0;
+        foreach (var habit in habits)
+        {
+            var habitLogs = logs.Where(l => l.HabitId == habit.Id && l.IsCompleted).ToList();
+            var longest = CalculateLongestStreak(habitLogs);
+            if (longest > bestStreak) bestStreak = longest;
+        }
+
+        var bestHabitGroup = logs.GroupBy(l => l.HabitId)
+                                 .OrderByDescending(g => g.Count())
+                                 .FirstOrDefault();
+
+        string bestHabitName = "None";
+        int bestHabitCompletions = 0;
+
+        if (bestHabitGroup != null)
+        {
+            bestHabitCompletions = bestHabitGroup.Count();
+            bestHabitName = habits.FirstOrDefault(h => h.Id == bestHabitGroup.Key)?.Title ?? "None";
+        }
+
+        // Monthly Progress (Last 6 months)
+        var monthlyProgress = new List<MonthlyProgressDto>();
+        for (int i = 5; i >= 0; i--)
+        {
+            var targetMonth = DateTime.UtcNow.AddMonths(-i);
+            var monthName = targetMonth.ToString("MMM");
+            var count = logs.Count(l => l.Date.Year == targetMonth.Year && l.Date.Month == targetMonth.Month);
+            monthlyProgress.Add(new MonthlyProgressDto { Month = monthName, Completions = count });
+        }
+
+        // Weekly Completion Rate (Last 4 weeks)
+        var weeklyCompletionRate = new List<WeeklyProgressDto>();
+        for (int i = 3; i >= 0; i--)
+        {
+            var startOfWeek = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.DayOfWeek - (i * 7));
+            var endOfWeek = startOfWeek.AddDays(6);
+            var count = logs.Count(l => l.Date >= startOfWeek && l.Date <= endOfWeek);
+            
+            // Simplified rate: completions / active habits (just for visualization purposes)
+            double rate = totalHabits == 0 ? 0 : Math.Min(100, Math.Round((double)count / totalHabits * 10, 2));
+            
+            weeklyCompletionRate.Add(new WeeklyProgressDto { Week = $"W{4 - i}", Rate = rate });
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        return Result.Success(new GlobalStatsDto
+        {
+            TotalHabits = totalHabits,
+            GlobalStreak = globalStreak,
+            TotalCompletions = totalCompletions,
+            BestHabitName = bestHabitName,
+            BestHabitCompletions = bestHabitCompletions,
+            CompletionRate = completionRate,
+            BestStreak = bestStreak,
+            ActiveDays = activeDays,
+            MonthlyProgress = monthlyProgress,
+            WeeklyCompletionRate = weeklyCompletionRate,
+            IsPro = user?.IsPro ?? false
+        });
+    }
+
+    public async Task<Result<List<string>>> GetAiInsights(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null || !user.IsPro)
+        {
+            return Result.Failure<List<string>>(new Error("ProRequired", "AI Insights are available to Pro users only."));
+        }
+
+        var startDate = DateTime.UtcNow.Date.AddDays(-7);
+        
+        var habits = await _context.Habits
+            .Include(h => h.Logs.Where(l => l.Date >= startDate))
+            .Where(h => h.UserId == userId && !h.IsDeleted)
+            .ToListAsync();
+
+        if (!habits.Any())
+        {
+            return Result.Failure<List<string>>(new Error("NoData", "Not enough habit data to generate insights."));
+        }
+
+        var totalHabits = habits.Count;
+        var totalCompleted = habits.Sum(h => h.Logs.Count(l => l.IsCompleted));
+        var totalPossible = totalHabits * 7;
+        var overallRate = totalPossible > 0 ? (int)Math.Round((double)totalCompleted / totalPossible * 100) : 0;
+
+        var promptBuilder = new System.Text.StringBuilder();
+        promptBuilder.AppendLine($"The user has {totalHabits} active habits tracked over the last 7 days.");
+        promptBuilder.AppendLine($"They completed {totalCompleted} check-ins out of {totalPossible} possible check-ins (7 days × {totalHabits} habits), giving an overall weekly completion rate of {overallRate}%.");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Breakdown per habit (each habit can be completed up to 7 times this week):");
+
+        foreach (var habit in habits)
+        {
+            var completedDays = habit.Logs.Count(l => l.IsCompleted);
+            var rate = (int)Math.Round((double)completedDays / 7 * 100);
+            var status = completedDays >= 6 ? "Excellent" : completedDays >= 4 ? "Good" : completedDays >= 2 ? "Needs improvement" : "Critical";
+            var ageInDays = (int)(DateTime.UtcNow - habit.CreatedAt).TotalDays;
+            var repeatInfo = habit.RepeatType switch
+            {
+                HabitRepeatType.EveryDay => "scheduled daily",
+                HabitRepeatType.SpecificDaysOfWeek => "scheduled on specific days of the week",
+                HabitRepeatType.SpecificDaysOfMonth => "scheduled on specific days of the month",
+                HabitRepeatType.XTimesPerPeriod => $"scheduled {habit.RepeatTimesPerPeriod}x per {habit.RepeatPeriod}",
+                _ => "custom schedule"
+            };
+
+            promptBuilder.AppendLine($"- Habit: \"{habit.Title}\"");
+            if (!string.IsNullOrWhiteSpace(habit.Description))
+                promptBuilder.AppendLine($"  Description: {habit.Description}");
+            promptBuilder.AppendLine($"  Schedule: {repeatInfo}, target goal: {habit.TargetDays} days total");
+            promptBuilder.AppendLine($"  Age: {ageInDays} days old");
+            promptBuilder.AppendLine($"  This week: completed {completedDays}/7 days ({rate}%) — Status: {status}");
+        }
+
+        var insights = await _aiService.GenerateInsightsAsync(promptBuilder.ToString());
+        return Result.Success(insights);
+    }
 
     public async Task<Result<HabitStatsDto>> GetHabitStats(Guid habitId, string userId)
     {

@@ -6,6 +6,7 @@ using HabitTrackerApi.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HabitTrackerApi.Controllers
 {
@@ -62,6 +63,25 @@ namespace HabitTrackerApi.Controllers
             return Ok(new { token });
         }
 
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound();
+
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                UserName = user.UserName!,
+                Email = user.Email!,
+                JoinedAt = user.JoinedAt,
+                IsPro = user.IsPro
+            });
+        }
         
         [HttpDelete("delete")]
         public async Task<IActionResult> DeleteAccount([FromBody] LoginRequest request)
@@ -73,6 +93,25 @@ namespace HabitTrackerApi.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = "Account deletion failed.", errors = result.Errors });
             return Ok(new { message = "Account deleted successfully." });
+        }
+
+        [HttpPost("upgrade-to-pro")]
+        [Authorize]
+        public async Task<IActionResult> UpgradeToPro()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound();
+
+            if (user.IsPro)
+                return BadRequest(new { message = "Already a Pro user." });
+
+            user.IsPro = true;
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { message = "Upgraded to Pro successfully!", isPro = true });
         }
 
         // ── helpers ──────────────────────────────────────────────────────────

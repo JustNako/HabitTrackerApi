@@ -60,6 +60,8 @@ public class HabitsController : ControllerBase
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized(new { error = new Error("Auth", "User identifier not found in token.") });
 
+        
+
         var result = await _service.CreateHabit(userId, dto);
         
         if (result.IsFailure)
@@ -107,6 +109,47 @@ public class HabitsController : ControllerBase
         }
 
         return Ok(new { streak = result.Value });
+    }
+
+    [Authorize]
+    [HttpGet("ai-insights")]
+    public async Task<IActionResult> GetAiInsights()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var result = await _service.GetAiInsights(userId);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == "ProRequired")
+                return StatusCode(403, new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpGet("global-streak")]
+    public async Task<IActionResult> GetGlobalStreak()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var result = await _service.GetGlobalStreak(userId);
+        
+        return Ok(new { streak = result.Value });
+    }
+
+    [HttpGet("global-stats")]
+    public async Task<IActionResult> GetGlobalStats()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var result = await _service.GetGlobalStats(userId);
+        
+        return Ok(result.Value);
     }
 
     [HttpGet("{id}/heatmap")]
