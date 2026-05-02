@@ -132,14 +132,16 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
+
+
 // Pipeline
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 
 if (!app.Environment.IsDevelopment())
 {

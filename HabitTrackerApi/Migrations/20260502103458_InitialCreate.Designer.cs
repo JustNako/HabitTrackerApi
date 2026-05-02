@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HabitTrackerApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260501140051_IsProVersion")]
-    partial class IsProVersion
+    [Migration("20260502103458_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -43,6 +43,10 @@ namespace HabitTrackerApi.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
+
+                    b.Property<string>("InviteCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsPro")
                         .HasColumnType("bit");
@@ -96,6 +100,35 @@ namespace HabitTrackerApi.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("HabitTrackerApi.Entities.Friendship", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AddresseeId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequesterId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddresseeId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.ToTable("Friendships");
+                });
+
             modelBuilder.Entity("HabitTrackerApi.Entities.Habit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -109,6 +142,9 @@ namespace HabitTrackerApi.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
 
                     b.Property<string>("RepeatDaysOfMonth")
@@ -311,6 +347,25 @@ namespace HabitTrackerApi.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("HabitTrackerApi.Entities.Friendship", b =>
+                {
+                    b.HasOne("HabitTrackerApi.Entities.ApplicationUser", "Addressee")
+                        .WithMany("ReceivedRequests")
+                        .HasForeignKey("AddresseeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HabitTrackerApi.Entities.ApplicationUser", "Requester")
+                        .WithMany("SentRequests")
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Addressee");
+
+                    b.Navigation("Requester");
+                });
+
             modelBuilder.Entity("HabitTrackerApi.Entities.Habit", b =>
                 {
                     b.HasOne("HabitTrackerApi.Entities.ApplicationUser", "User")
@@ -387,6 +442,10 @@ namespace HabitTrackerApi.Migrations
             modelBuilder.Entity("HabitTrackerApi.Entities.ApplicationUser", b =>
                 {
                     b.Navigation("Habits");
+
+                    b.Navigation("ReceivedRequests");
+
+                    b.Navigation("SentRequests");
                 });
 
             modelBuilder.Entity("HabitTrackerApi.Entities.Habit", b =>
