@@ -10,11 +10,19 @@ public class FriendService
 {
     private readonly AppDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly NotificationService _notifications;
+    private readonly AchievementEvaluatorService _achievements;
 
-    public FriendService(AppDbContext context, UserManager<ApplicationUser> userManager)
+    public FriendService(
+        AppDbContext context,
+        UserManager<ApplicationUser> userManager,
+        NotificationService notifications,
+        AchievementEvaluatorService achievements)
     {
         _context = context;
         _userManager = userManager;
+        _notifications = notifications;
+        _achievements = achievements;
     }
 
     // Get your invite code
@@ -51,6 +59,19 @@ public class FriendService
             AddresseeId = addressee.Id
         });
         await _context.SaveChangesAsync();
+
+        // 🔔 Notify the target user about the incoming friend request
+        var requester = await _userManager.FindByIdAsync(requesterId);
+        if (addressee.FcmToken != null && requester != null)
+        {
+            await _notifications.SendAsync(
+                addressee.FcmToken,
+                title: "New Friend Request 👋",
+                body: $"{requester.UserName} wants to be your friend on Streakz!",
+                data: new Dictionary<string, string> { ["type"] = "friend_request" }
+            );
+        }
+
         return (true, string.Empty);
     }
 
@@ -65,6 +86,24 @@ public class FriendService
 
         friendship.Status = FriendshipStatus.Accepted;
         await _context.SaveChangesAsync();
+
+        // 🔔 Notify the original requester that their request was accepted
+        var requester = await _userManager.FindByIdAsync(friendship.RequesterId);
+        var accepter = await _userManager.FindByIdAsync(userId);
+        if (requester?.FcmToken != null && accepter != null)
+        {
+            await _notifications.SendAsync(
+                requester.FcmToken,
+                title: "Friend Request Accepted! 🎉",
+                body: $"{accepter.UserName} accepted your friend request. You can now see each other's habits!",
+                data: new Dictionary<string, string> { ["type"] = "request_accepted" }
+            );
+        }
+
+        // Evaluate achievements for both users
+        await _achievements.EvaluateUserAsync(userId);
+        await _achievements.EvaluateUserAsync(friendship.RequesterId);
+
         return (true, string.Empty);
     }
 
@@ -114,6 +153,7 @@ public class FriendService
 
             result.Add(new FriendDto
             {
+                FriendshipId = f.Id,
                 Id = friendId,
                 UserName = friendUser.UserName ?? "Unknown",
                 IsPro = friendUser.IsPro,

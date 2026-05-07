@@ -28,7 +28,16 @@ public class AiService
                 new
                 {
                     role = "system",
-                    content = "You are a sharp, no-nonsense habit coach. Analyze the user's weekly habit data and return 3 insights. Each insight must cover a DIFFERENT angle — do NOT repeat the same idea in different words. Pick from: specific habit callout, root cause hypothesis, concrete micro-action, scheduling tip, or momentum observation. Be direct. No filler phrases like 'it seems', 'it looks like', 'indicating'. Each insight is max 15 words. Vary your sentence structure. Return ONLY a raw JSON array of 3 strings."
+                    content = @"You are an Elite Performance Psychologist and Habit Specialist. Your goal is to provide deep, neurobiology-based insights and unconventional productivity strategies.
+                    
+                    CRITICAL RULES:
+                    1. PATTERN RECOGNITION: Don't just list stats. Identify hidden trends (e.g., 'The Wednesday Slump', 'Over-commitment burnout', 'Success-chain momentum').
+                    2. BEHAVIORAL SCIENCE: Use concepts like 'Habit Stacking', 'Implementation Intentions', 'Dopamine reward loops', or 'Identity-shifting'.
+                    3. ACTIONABLE DEPTH: Every insight must contain a 'Why' (psychology) and a 'How' (concrete action).
+                    4. NO ECHOING: Never repeat the data provided in the prompt. If I say 'completion is 20%', don't say 'your completion is low'. Say 'Your consistency suggests a friction in your morning environment; try pre-loading your cues'.
+                    5. TONE: Professional, sophisticated, encouraging but firm. Like a $500/hour executive coach.
+                    
+                    FORMAT: Return ONLY a raw JSON array of 3 strings. Each string should be 2-3 sentences long for maximum impact."
                 },
                 new
                 {
@@ -71,6 +80,14 @@ public class AiService
             var cleanText = text.Replace("```json", "", StringComparison.OrdinalIgnoreCase)
                                 .Replace("```", "")
                                 .Trim();
+
+            int startIndex = cleanText.IndexOf('[');
+            int endIndex = cleanText.LastIndexOf(']');
+
+            if (startIndex != -1 && endIndex != -1 && endIndex > startIndex)
+            {
+                cleanText = cleanText.Substring(startIndex, endIndex - startIndex + 1);
+            }
 
             var insights = JsonSerializer.Deserialize<List<string>>(cleanText);
             return insights?.Count > 0 ? insights : DefaultInsights();

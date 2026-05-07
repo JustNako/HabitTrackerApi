@@ -12,10 +12,12 @@ namespace HabitTrackerApi.Services;
 public class SyncService
 {
     private readonly AppDbContext _context;
+    private readonly AchievementEvaluatorService _achievements;
 
-    public SyncService(AppDbContext context)
+    public SyncService(AppDbContext context, AchievementEvaluatorService achievements)
     {
         _context = context;
+        _achievements = achievements;
     }
 
     public async Task<Result<SyncPullResponse>> PullAsync(string userId, SyncPullRequest request)
@@ -159,6 +161,9 @@ public class SyncService
         }
 
         await _context.SaveChangesAsync();
+
+        // Evaluate achievements after sync
+        await _achievements.EvaluateUserAsync(userId);
 
         return Result.Success();
     }

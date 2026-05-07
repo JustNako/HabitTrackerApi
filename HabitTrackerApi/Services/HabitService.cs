@@ -18,13 +18,15 @@ public class HabitService
     private readonly AppDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly AiService _aiService;
+    private readonly AchievementEvaluatorService _achievements;
 
-    public HabitService(IHabitRepository repo, AppDbContext context, UserManager<ApplicationUser> userManager, AiService aiService)
+    public HabitService(IHabitRepository repo, AppDbContext context, UserManager<ApplicationUser> userManager, AiService aiService, AchievementEvaluatorService achievements)
     {
         _repo = repo;
         _context = context;
         _userManager = userManager;
         _aiService = aiService;
+        _achievements = achievements;
     }
 
     public async Task<Result<List<HabitDto>>> GetUserHabits(string userId)
@@ -53,13 +55,16 @@ public class HabitService
 
     public async Task<Result> CreateHabit(string userId, CreateHabitDto dto)
     {
+        await SyncProStatus(userId);
         var validationResult = ValidateRepeatSettings(dto);
         if (validationResult.IsFailure)
             return validationResult;
 
         // ── Pro tier check ─────────────────────────────────────────────────
         var user = await _userManager.FindByIdAsync(userId);
-        if (user != null && !user.IsPro)
+        bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
+        if (!isCurrentlyPro)
         {
             var existingCount = await _context.Habits.CountAsync(h => h.UserId == userId && !h.IsDeleted);
             if (existingCount >= FreeHabitLimit)
@@ -83,6 +88,9 @@ public class HabitService
 
         await _repo.Add(habit);
         await _repo.Save();
+
+        // Evaluate achievements
+        await _achievements.EvaluateUserAsync(userId);
 
         return Result.Success();
     }
@@ -152,6 +160,10 @@ public class HabitService
         }
 
         await _context.SaveChangesAsync();
+
+        // Evaluate achievements
+        await _achievements.EvaluateUserAsync(userId);
+
         return Result.Success();
     }
 
@@ -224,6 +236,7 @@ public class HabitService
 
     public async Task<Result<GlobalStatsDto>> GetGlobalStats(string userId)
     {
+        await SyncProStatus(userId);
         var habits = await _context.Habits.Where(h => h.UserId == userId).ToListAsync();
         var logs = await _context.HabitLogs.Include(l => l.Habit).Where(l => l.Habit.UserId == userId && l.IsCompleted).ToListAsync();
 
@@ -271,16 +284,30 @@ public class HabitService
 
         // Weekly Completion Rate (Last 4 weeks)
         var weeklyCompletionRate = new List<WeeklyProgressDto>();
+        var now = DateTime.UtcNow.Date;
+        
+        // Calculate the start of the current week (Monday)
+        int daysSinceMonday = ((int)now.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        var currentMonday = now.AddDays(-daysSinceMonday);
+
         for (int i = 3; i >= 0; i--)
         {
-            var startOfWeek = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.DayOfWeek - (i * 7));
-            var endOfWeek = startOfWeek.AddDays(6);
-            var count = logs.Count(l => l.Date >= startOfWeek && l.Date <= endOfWeek);
+            var startOfWeek = currentMonday.AddDays(-(i * 7));
+            var endOfWeek = startOfWeek.AddDays(6).AddHours(23).AddMinutes(59);
             
-            // Simplified rate: completions / active habits (just for visualization purposes)
-            double rate = totalHabits == 0 ? 0 : Math.Min(100, Math.Round((double)count / totalHabits * 10, 2));
+            var weeklyLogsCount = logs.Count(l => l.Date >= startOfWeek && l.Date <= endOfWeek);
             
-            weeklyCompletionRate.Add(new WeeklyProgressDto { Week = $"W{4 - i}", Rate = rate });
+            // Total possible completions = habits count * 7 days
+            int possibleCompletions = totalHabits * 7;
+            
+            double rate = possibleCompletions == 0 
+                ? 0 
+                : Math.Min(100, Math.Round((double)weeklyLogsCount / possibleCompletions * 100, 1));
+            
+            // Label like "22-28 May" or "W1"
+            string weekLabel = $"{startOfWeek:ddMMM}"; 
+            
+            weeklyCompletionRate.Add(new WeeklyProgressDto { Week = weekLabel, Rate = rate });
         }
 
         var user = await _userManager.FindByIdAsync(userId);
@@ -296,14 +323,17 @@ public class HabitService
             ActiveDays = activeDays,
             MonthlyProgress = monthlyProgress,
             WeeklyCompletionRate = weeklyCompletionRate,
-            IsPro = user?.IsPro ?? false
+            IsPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow)
         });
     }
 
     public async Task<Result<List<string>>> GetAiInsights(string userId)
     {
+        await SyncProStatus(userId);
         var user = await _userManager.FindByIdAsync(userId);
-        if (user == null || !user.IsPro)
+        bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
+        if (!isCurrentlyPro)
         {
             return Result.Failure<List<string>>(new Error("ProRequired", "AI Insights are available to Pro users only."));
         }
@@ -333,25 +363,30 @@ public class HabitService
 
         foreach (var habit in habits)
         {
-            var completedDays = habit.Logs.Count(l => l.IsCompleted);
+            var logsLast7Days = habit.Logs.Where(l => l.Date >= startDate).OrderBy(l => l.Date).ToList();
+            var completedDays = logsLast7Days.Count(l => l.IsCompleted);
+            
+            // Create a string pattern like [✅, ❌, ✅, ✅, ❌, ❌, ✅]
+            var patternParts = new List<string>();
+            for (int i = 0; i < 7; i++)
+            {
+                var d = startDate.AddDays(i);
+                var isDone = logsLast7Days.Any(l => l.Date.Date == d.Date && l.IsCompleted);
+                patternParts.Add(isDone ? "✅" : "❌");
+            }
+            var patternString = string.Join("", patternParts);
+
             var rate = (int)Math.Round((double)completedDays / 7 * 100);
-            var status = completedDays >= 6 ? "Excellent" : completedDays >= 4 ? "Good" : completedDays >= 2 ? "Needs improvement" : "Critical";
             var ageInDays = (int)(DateTime.UtcNow - habit.CreatedAt).TotalDays;
             var repeatInfo = habit.RepeatType switch
             {
-                HabitRepeatType.EveryDay => "scheduled daily",
-                HabitRepeatType.SpecificDaysOfWeek => "scheduled on specific days of the week",
-                HabitRepeatType.SpecificDaysOfMonth => "scheduled on specific days of the month",
-                HabitRepeatType.XTimesPerPeriod => $"scheduled {habit.RepeatTimesPerPeriod}x per {habit.RepeatPeriod}",
+                HabitRepeatType.EveryDay => "daily",
                 _ => "custom schedule"
             };
 
-            promptBuilder.AppendLine($"- Habit: \"{habit.Title}\"");
-            if (!string.IsNullOrWhiteSpace(habit.Description))
-                promptBuilder.AppendLine($"  Description: {habit.Description}");
-            promptBuilder.AppendLine($"  Schedule: {repeatInfo}, target goal: {habit.TargetDays} days total");
-            promptBuilder.AppendLine($"  Age: {ageInDays} days old");
-            promptBuilder.AppendLine($"  This week: completed {completedDays}/7 days ({rate}%) — Status: {status}");
+            promptBuilder.AppendLine($"- Habit: \"{habit.Title}\" ({repeatInfo})");
+            promptBuilder.AppendLine($"  7-day pattern: {patternString} ({completedDays}/7 days)");
+            if (ageInDays < 14) promptBuilder.AppendLine("  Note: This is a NEW habit, fragile phase.");
         }
 
         var insights = await _aiService.GenerateInsightsAsync(promptBuilder.ToString());
@@ -580,5 +615,14 @@ public class HabitService
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(int.Parse)
             .ToList();
+    }
+    private async Task SyncProStatus(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user != null && user.IsPro && user.ProExpiration != null && user.ProExpiration < DateTime.UtcNow)
+        {
+            user.IsPro = false;
+            await _userManager.UpdateAsync(user);
+        }
     }
 }

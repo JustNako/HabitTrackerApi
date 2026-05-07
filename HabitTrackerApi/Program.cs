@@ -1,3 +1,5 @@
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using HabitTrackerApi.Data;
 using HabitTrackerApi.Entities;
 using HabitTrackerApi.Repositories;
@@ -12,11 +14,42 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("GlobalLimit", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 100, // 100 requests per minute per IP
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    });
+
+    options.AddPolicy("AuthLimit", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10, // 10 requests per minute per IP for Auth routes
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    });
+
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 
 // API Versioning
 builder.Services.AddApiVersioning(options =>
@@ -125,17 +158,39 @@ builder.Services.AddScoped<IHabitRepository, HabitRepository>();
 builder.Services.AddScoped<HabitService>();
 builder.Services.AddScoped<SyncService>();
 builder.Services.AddScoped<FriendService>();
+builder.Services.AddScoped<AchievementEvaluatorService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpClient<AiService>();
+builder.Services.AddHostedService<HabitReminderService>(); // Daily habit reminder scheduler
+
+// Firebase Admin SDK
+var firebaseKeyPath = Path.Combine(builder.Environment.ContentRootPath,
+    "habit-tracker-875de-firebase-adminsdk-fbsvc-2c8754da4b.json");
+
+if (File.Exists(firebaseKeyPath) && FirebaseApp.DefaultInstance == null)
+{
+    FirebaseApp.Create(new AppOptions
+    {
+        Credential = GoogleCredential.FromFile(firebaseKeyPath)
+    });
+}
 
 builder.Services.AddExceptionHandler<HabitTrackerApi.Middleware.GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-
-
+// Автоматическое применение миграций при запуске
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 // Pipeline
 app.UseExceptionHandler();
+app.UseRateLimiter(); // Apply rate limiting before static files and routing
+app.UseStaticFiles();
 
 
 
@@ -145,12 +200,13 @@ app.UseSwaggerUI();
 
 if (!app.Environment.IsDevelopment())
 {
+    app.UseHsts();
     app.UseHttpsRedirection();
 }
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("GlobalLimit"); // Apply GlobalLimit to all controllers by default
 
 app.Run();

@@ -7,6 +7,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using HabitTrackerApi.Services;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace HabitTrackerApi.Controllers
 {
@@ -17,21 +22,39 @@ namespace HabitTrackerApi.Controllers
     {
         private readonly IConfiguration _config;
         private readonly UserManager<ApplicationUser> _userManager; 
+        private readonly HabitTrackerApi.Data.AppDbContext _context;
+        private readonly EmailService _emailService;
+        private readonly NotificationService _notificationService;
+        private readonly IMemoryCache _cache;
 
-        public AuthController(IConfiguration config, UserManager<ApplicationUser> userManager)
+        public AuthController(
+            IConfiguration config, 
+            UserManager<ApplicationUser> userManager, 
+            HabitTrackerApi.Data.AppDbContext context, 
+            EmailService emailService, 
+            NotificationService notificationService,
+            IMemoryCache cache)
         {
             _userManager = userManager;
             _config = config;
+            _context = context;
+            _emailService = emailService;
+            _notificationService = notificationService;
+            _cache = cache;
         }
 
 
 
         [HttpPost("register")]
+        [EnableRateLimiting("AuthLimit")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             var userExists = await _userManager.FindByNameAsync(dto.UserName);
+            var emailExists = await _userManager.FindByEmailAsync(dto.Email);
             if (userExists != null)
                 return BadRequest(new { message = "Username already exists." });
+            if (emailExists != null)
+                return BadRequest(new { message = "Email already in use." });
 
             var user = new ApplicationUser
             {
@@ -44,7 +67,22 @@ namespace HabitTrackerApi.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = "User creation failed.", errors = result.Errors });
 
-            return Ok(new { message = "User registered successfully." });
+            // Generate email confirmation token and send email
+            try
+            {
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var encodedToken = Uri.EscapeDataString(token);
+                var baseUrl = _config["App:BaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+                var confirmLink = $"{baseUrl}/api/v1/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+                await _emailService.SendConfirmationEmailAsync(user.Email!, user.UserName!, confirmLink);
+            }
+            catch (Exception ex)
+            {
+                // Don't fail registration if email fails — log it
+                Console.WriteLine($"[Email Error] {ex.Message}");
+            }
+
+            return Ok(new { message = "Registration successful! Please check your email to confirm your account." });
         }
 
 
@@ -52,6 +90,7 @@ namespace HabitTrackerApi.Controllers
         /// Returns a signed JWT for valid credentials.
         /// </summary>
         [HttpPost("login")]
+        [EnableRateLimiting("AuthLimit")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var user = await _userManager.FindByNameAsync(request.Username);
@@ -59,10 +98,282 @@ namespace HabitTrackerApi.Controllers
             if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
                 return Unauthorized(new { message = "Invalid credentials" });
 
+            // Block login if email is not confirmed
+            if (!user.EmailConfirmed)
+                return Unauthorized(new { message = "email_not_confirmed", email = user.Email });
+
             var token = GenerateToken(user);
 
             return Ok(new { token });
         }
+
+        [HttpGet("confirm-email")]
+        public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return Content(await GetHtmlPageAsync("❌ Invalid Link", "This confirmation link is invalid or has expired."), "text/html");
+
+            var decodedToken = Uri.UnescapeDataString(token);
+            var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
+
+            if (!result.Succeeded)
+                return Content(await GetHtmlPageAsync("❌ Confirmation Failed", "This link has already been used or has expired. Please request a new one."), "text/html");
+
+            return Content(await GetHtmlPageAsync("✅ Email Confirmed!", $"Hi {user.UserName}! Your email has been confirmed. You can now log in to Flow."), "text/html");
+        }
+
+        [HttpPost("resend-confirmation")]
+        [EnableRateLimiting("AuthLimit")]
+        public async Task<IActionResult> ResendConfirmation([FromBody] ResendConfirmationDto dto)
+        {
+            var cacheKey = $"ResendLimit_{dto.Email}";
+            if (_cache.TryGetValue(cacheKey, out _))
+            {
+                return BadRequest(new { message = "Please wait a minute before requesting another email." });
+            }
+
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+            {
+                // Set cache even if user doesn't exist to prevent timing attacks
+                _cache.Set(cacheKey, true, TimeSpan.FromMinutes(1));
+                return Ok(new { message = "If that email exists, we sent a new confirmation link." }); 
+            }
+
+            if (user.EmailConfirmed)
+                return BadRequest(new { message = "This email is already confirmed." });
+
+            try
+            {
+                var confirmToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var encodedToken = Uri.EscapeDataString(confirmToken);
+                var baseUrl = _config["App:BaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+                var confirmLink = $"{baseUrl}/api/v1/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+                await _emailService.SendConfirmationEmailAsync(user.Email!, user.UserName!, confirmLink);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Email Error] {ex.Message}");
+                return StatusCode(500, new { message = "Failed to send email. Please try again later." });
+            }
+
+            _cache.Set(cacheKey, true, TimeSpan.FromMinutes(1));
+            return Ok(new { message = "Confirmation email sent. Please check your inbox." });
+        }
+
+        [HttpPost("forgot-password")]
+        [EnableRateLimiting("AuthLimit")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            var cacheKey = $"ForgotLimit_{dto.Email}";
+            if (_cache.TryGetValue(cacheKey, out _))
+            {
+                return BadRequest(new { message = "Please wait a minute before requesting another password reset." });
+            }
+
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null || !await _userManager.IsEmailConfirmedAsync(user))
+            {
+                _cache.Set(cacheKey, true, TimeSpan.FromMinutes(1));
+                // Don't reveal that the user does not exist or is not confirmed
+                return Ok(new { message = "If your email is registered and confirmed, a password reset link has been sent." });
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            var baseUrl = _config["App:BaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+            var resetLink = $"{baseUrl}/api/v1/auth/reset-password-page?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
+
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(user.Email!, user.UserName!, resetLink);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Email Error] {ex.Message}");
+                return StatusCode(500, new { message = "Failed to send reset email. Please try again later." });
+            }
+
+            _cache.Set(cacheKey, true, TimeSpan.FromMinutes(1));
+            return Ok(new { message = "If your email is registered and confirmed, a password reset link has been sent." });
+        }
+
+        [HttpGet("reset-password-page")]
+        public IActionResult ResetPasswordPage([FromQuery] string email, [FromQuery] string token)
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(token))
+                return BadRequest("Invalid password reset link.");
+
+            string html = $$"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Reset Password - Flow</title>
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0A0A; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                    .card { background: #16161A; padding: 40px; border-radius: 16px; border: 1px solid #2C2C35; width: 100%; max-width: 400px; box-sizing: border-box; }
+                    h2 { text-align: center; margin-top: 0; }
+                    input { width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid #2C2C35; background: #0A0A0A; color: white; box-sizing: border-box; }
+                    button { width: 100%; padding: 14px; background: linear-gradient(135deg, #DA22FF, #9733EE); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+                  </style>
+                </head>
+                <body>
+                  <div class="card">
+                    <h2>Reset Password</h2>
+                    <form action="/api/v1/auth/reset-password" method="post">
+                      <input type="hidden" name="email" value="{{email}}">
+                      <input type="hidden" name="token" value="{{token}}">
+                      <label>New Password</label>
+                      <input type="password" name="newPassword" required minlength="6">
+                      <button type="submit">Reset Password</button>
+                    </form>
+                  </div>
+                </body>
+                </html>
+                """;
+
+            return Content(html, "text/html");
+        }
+
+        [HttpPost("reset-password")]
+        [Consumes("application/x-www-form-urlencoded")]
+        public async Task<IActionResult> ResetPassword([FromForm] string email, [FromForm] string token, [FromForm] string newPassword)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+                return Content(await GetHtmlPageAsync("❌ Error", "Invalid user."), "text/html");
+
+            string decodedToken;
+            try
+            {
+                var decodedTokenBytes = WebEncoders.Base64UrlDecode(token);
+                decodedToken = Encoding.UTF8.GetString(decodedTokenBytes);
+            }
+            catch
+            {
+                return Content(await GetHtmlPageAsync("❌ Error", "Invalid token format."), "text/html");
+            }
+
+            var result = await _userManager.ResetPasswordAsync(user, decodedToken, newPassword);
+
+            if (!result.Succeeded)
+            {
+                string errors = string.Join("<br>", result.Errors.Select(e => e.Description));
+                return Content(await GetHtmlPageAsync("❌ Reset Failed", $"Failed to reset password:<br><br>{errors}"), "text/html");
+            }
+
+            return Content(await GetHtmlPageAsync("✅ Password Reset!", "Your password has been reset successfully. You can now return to the app and log in with your new password."), "text/html");
+        }
+
+        private async Task<string> GetHtmlPageAsync(string title, string message)
+        {
+            var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "email_confirmation_result.html");
+            if (!System.IO.File.Exists(templatePath))
+            {
+                // Fallback basic HTML if template is missing
+                return $"<html><body><h1>{title}</h1><p>{message}</p></body></html>";
+            }
+
+            var html = await System.IO.File.ReadAllTextAsync(templatePath);
+            var icon = title.StartsWith("✅") ? "🎉" : "⚠️";
+            
+            return html
+                .Replace("{{title}}", title)
+                .Replace("{{icon}}", icon)
+                .Replace("{{message}}", message);
+        }
+
+        [HttpPost("edit")]
+        [Authorize]
+        public async Task<IActionResult> EditProfile([FromBody] EditProfileDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId!);
+            if (user == null) return NotFound();
+
+            // 1. Update Email
+            bool emailChanged = false;
+            if (!string.IsNullOrEmpty(dto.Email) && dto.Email != user.Email)
+            {
+                var existingEmail = await _userManager.FindByEmailAsync(dto.Email);
+                if (existingEmail != null)
+                    return BadRequest(new { message = "Email already in use." });
+
+                user.Email = dto.Email;
+                user.EmailConfirmed = false; // Сбрасываем подтверждение
+                emailChanged = true;
+            }
+
+            // 2. Update UserName (with uniqueness check)
+            if (!string.IsNullOrEmpty(dto.UserName) && dto.UserName != user.UserName)
+            {
+                var existing = await _userManager.FindByNameAsync(dto.UserName);
+                if (existing != null) 
+                    return BadRequest(new { message = "Username already taken." });
+                
+                user.UserName = dto.UserName;
+            }
+
+            // 3. Update Password (securely via ChangePasswordAsync)
+            if (!string.IsNullOrEmpty(dto.NewPassword))
+            {
+                if (string.IsNullOrEmpty(dto.CurrentPassword))
+                    return BadRequest(new { message = "Current password is required to change password." });
+
+                var passResult = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+                if (!passResult.Succeeded)
+                    return BadRequest(new { message = "Password update failed.", errors = passResult.Errors });
+            }
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Profile update failed.", errors = result.Errors });
+
+            if (emailChanged)
+            {
+                try
+                {
+                    var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    var encodedToken = Uri.EscapeDataString(token);
+                    var baseUrl = _config["App:BaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+                    var confirmLink = $"{baseUrl}/api/v1/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+                    await _emailService.SendConfirmationEmailAsync(user.Email!, user.UserName!, confirmLink);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Email Error] {ex.Message}");
+                }
+
+                return Ok(new { 
+                    message = "Email updated. Please check your new inbox to confirm it.",
+                    emailChanged = true 
+                });
+            }
+
+            return Ok(new { message = "Profile updated successfully." });
+        }
+
+        [HttpGet("achievements")]
+        [Authorize]
+        public async Task<IActionResult> GetAchievements()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var achievements = await _context.UserAchievements
+                .Where(a => a.UserId == userId)
+                .Select(a => new {
+                    Type = a.Type.ToString(),
+                    UnlockedAt = a.UnlockedAt
+                })
+                .ToListAsync();
+
+            return Ok(achievements);
+        }
+
 
         [HttpGet("me")]
         [Authorize]
@@ -74,13 +385,23 @@ namespace HabitTrackerApi.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound();
 
+            // ── Lazy Update: Sync IsPro with Expiration ───────────────────────
+            bool isExpired = user.IsPro && user.ProExpiration != null && user.ProExpiration < DateTime.UtcNow;
+            if (isExpired)
+            {
+                user.IsPro = false;
+                await _userManager.UpdateAsync(user);
+            }
+
+            bool isCurrentlyPro = user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
             return Ok(new UserDto
             {
                 Id = user.Id,
                 UserName = user.UserName!,
                 Email = user.Email!,
                 JoinedAt = user.JoinedAt,
-                IsPro = user.IsPro
+                IsPro = isCurrentlyPro
             });
         }
         
@@ -90,6 +411,23 @@ namespace HabitTrackerApi.Controllers
             var user = await _userManager.FindByNameAsync(request.Username);
             if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
                 return Unauthorized(new { message = "Invalid credentials" });
+
+            // Сначала удаляем все связанные данные (Friendships, Habits, Achievements),
+            // чтобы избежать ошибки Foreign Key constraint (500 Server Error)
+            var friendships = _context.Friendships
+                .Where(f => f.RequesterId == user.Id || f.AddresseeId == user.Id);
+            _context.Friendships.RemoveRange(friendships);
+
+            var habits = _context.Habits.IgnoreQueryFilters()
+                .Where(h => h.UserId == user.Id);
+            _context.Habits.RemoveRange(habits);
+
+            var achievements = _context.UserAchievements
+                .Where(a => a.UserId == user.Id);
+            _context.UserAchievements.RemoveRange(achievements);
+
+            await _context.SaveChangesAsync();
+
             var result = await _userManager.DeleteAsync(user);
             if (!result.Succeeded)
                 return BadRequest(new { message = "Account deletion failed.", errors = result.Errors });
@@ -98,7 +436,7 @@ namespace HabitTrackerApi.Controllers
 
         [HttpPost("upgrade-to-pro")]
         [Authorize]
-        public async Task<IActionResult> UpgradeToPro()
+        public async Task<IActionResult> UpgradeToPro([FromBody] UpgradeRequest request)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null) return Unauthorized();
@@ -106,13 +444,55 @@ namespace HabitTrackerApi.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound();
 
-            if (user.IsPro)
-                return BadRequest(new { message = "Already a Pro user." });
+            // Если подписка уже есть и она активна, будем продлевать от текущей даты окончания, 
+            // либо от сейчас, если она истекла.
+            DateTime startDate = (user.ProExpiration != null && user.ProExpiration > DateTime.UtcNow) 
+                ? user.ProExpiration.Value 
+                : DateTime.UtcNow;
+
+            if (request.Plan.ToLower() == "monthly")
+            {
+                user.ProExpiration = startDate.AddMonths(1);
+            }
+            else if (request.Plan.ToLower() == "yearly")
+            {
+                user.ProExpiration = startDate.AddYears(1);
+            }
+            else
+            {
+                return BadRequest(new { message = "Invalid plan type. Use 'monthly' or 'yearly'." });
+            }
 
             user.IsPro = true;
             await _userManager.UpdateAsync(user);
 
-            return Ok(new { message = "Upgraded to Pro successfully!", isPro = true });
+            return Ok(new { 
+                message = $"Successfully subscribed to {request.Plan}!", 
+                proUntil = user.ProExpiration,
+                isPro = true 
+            });
+        }
+
+        [HttpPost("cancel-pro")]
+        [Authorize]
+        public async Task<IActionResult> CancelPro()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound();
+
+            if (!user.IsPro)
+                return BadRequest(new { message = "You are not a Pro user." });
+
+            user.IsPro = false;
+            // Optionally, we could set ProExpiration to DateTime.UtcNow so the UI immediately sees it as expired
+            user.ProExpiration = DateTime.UtcNow.AddMinutes(-1);
+            
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { message = "Pro plan cancelled successfully.", isPro = false });
         }
 
         // ── helpers ──────────────────────────────────────────────────────────
@@ -136,7 +516,7 @@ namespace HabitTrackerApi.Controllers
                 issuer: jwtSection["Issuer"],
                 audience: jwtSection["Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(8),
+                expires: DateTime.UtcNow.AddDays(365), // Увеличено с 8 часов до 1 года для мобильного приложения
                 signingCredentials: creds
             );
 
@@ -153,9 +533,78 @@ namespace HabitTrackerApi.Controllers
             var suffix = Guid.NewGuid().ToString("N")[..4].ToUpper();
             return $"{prefix}-{suffix}";
         }
+
+        /// <summary>
+        /// Saves or updates the device FCM token for push notifications.
+        /// </summary>
+        [Authorize]
+        [HttpPost("fcm-token")]
+        public async Task<IActionResult> UpdateFcmToken([FromBody] FcmTokenDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null) return Unauthorized();
+
+            user.FcmToken = dto.Token;
+            await _userManager.UpdateAsync(user);
+
+            return Ok();
+        }
+
+        /// <summary>Updates the user's habit reminder settings.</summary>
+        [Authorize]
+        [HttpPut("notification-settings")]
+        public async Task<IActionResult> UpdateNotificationSettings([FromBody] NotificationSettingsDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return Unauthorized();
+
+            user.ReminderEnabled = dto.Enabled;
+            user.ReminderFrequency = dto.Frequency;
+            await _userManager.UpdateAsync(user);
+            return Ok();
+        }
+
+        /// <summary>Returns current notification settings.</summary>
+        [Authorize]
+        [HttpGet("notification-settings")]
+        public async Task<IActionResult> GetNotificationSettings()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return Unauthorized();
+            return Ok(new { enabled = user.ReminderEnabled, frequency = user.ReminderFrequency });
+        }
+
+        [Authorize]
+        [HttpPost("test-notification")]
+        public async Task<IActionResult> TestNotification()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null) return Unauthorized();
+            if (string.IsNullOrEmpty(user.FcmToken))
+                return BadRequest(new { message = "No device token registered. Please grant notification permissions in the app." });
+
+            await _notificationService.SendAsync(
+                user.FcmToken, 
+                "🚀 Test Notification", 
+                "Everything is working! This is how your habit reminders will look.",
+                new Dictionary<string, string> { { "type", "test" } }
+            );
+
+            return Ok(new { message = "Test notification sent!" });
+        }
     }
 
     // ── request DTO ──────────────────────────────────────────────────────────
 
+    public record UpgradeRequest(string Plan);
     public record LoginRequest(string Username, string Password);
+    public record FcmTokenDto(string Token);
+    public record NotificationSettingsDto(bool Enabled, int Frequency);
+    public record ForgotPasswordDto(string Email);
 }

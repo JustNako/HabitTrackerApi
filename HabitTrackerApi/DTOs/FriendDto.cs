@@ -2,6 +2,7 @@ namespace HabitTrackerApi.DTOs;
 
 public class FriendDto
 {
+    public Guid FriendshipId { get; set; }
     public string Id { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
     public bool IsPro { get; set; }
