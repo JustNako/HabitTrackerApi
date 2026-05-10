@@ -598,6 +598,150 @@ namespace HabitTrackerApi.Controllers
 
             return Ok(new { message = "Test notification sent!" });
         }
+
+        [Authorize]
+        [HttpPost("test-ai-notification")]
+        public async Task<IActionResult> TestAiNotification([FromServices] AiService aiService)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null) return Unauthorized();
+            if (string.IsNullOrEmpty(user.FcmToken))
+                return BadRequest(new { message = "No device token registered. Please grant notification permissions in the app." });
+
+            var today = DateTime.UtcNow.Date;
+            var incompleteHabits = await _context.Habits
+                .Where(h => h.UserId == user.Id && !h.IsDeleted)
+                .Where(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted))
+                .Select(h => h.Title)
+                .ToListAsync();
+
+            if (incompleteHabits.Count == 0)
+            {
+                return BadRequest(new { message = "You have completed all habits for today! Add an incomplete habit to test this feature." });
+            }
+
+            string title = "⚡ AI Coach Message";
+            string prompt = $"Uncompleted habits: {string.Join(", ", incompleteHabits)}";
+            string body = await aiService.GenerateNotificationMessageAsync(prompt);
+
+            await _notificationService.SendAsync(
+                user.FcmToken, 
+                title, 
+                body,
+                new Dictionary<string, string> { { "type", "reminder" } }
+            );
+
+            return Ok(new { message = "AI notification sent!", generatedBody = body });
+        }
+        
+        [Authorize]
+        [HttpPost("usage")]
+        public async Task<IActionResult> UpdateUsage([FromBody] AppUsageDto request)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            if (!DateTime.TryParse(request.Date, out var dateParsed))
+            {
+                return BadRequest("Invalid date format.");
+            }
+
+            var dateOnly = dateParsed.Date;
+
+            var usage = await _context.AppUsages
+                .FirstOrDefaultAsync(u => u.UserId == userId && u.Date == dateOnly);
+
+            if (usage != null)
+            {
+                usage.SecondsSpent = request.SecondsSpent;
+            }
+            else
+            {
+                usage = new AppUsage
+                {
+                    UserId = userId,
+                    Date = dateOnly,
+                    SecondsSpent = request.SecondsSpent
+                };
+                _context.AppUsages.Add(usage);
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Usage updated" });
+        }
+        
+        [Authorize]
+        [HttpPost("generate-routine")]
+        public async Task<IActionResult> GenerateRoutine([FromBody] GenerateRoutineRequest request, [FromServices] AiService aiService)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound("User not found");
+
+            // Limits logic
+            const int FreeTotalLimit = 2;
+            const int ProDailyLimit = 5;
+
+            bool isCurrentlyPro = user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
+            if (isCurrentlyPro)
+            {
+                // Daily limit for Pro
+                var today = DateTime.UtcNow.Date;
+                if (user.LastAiGenerationDate?.Date != today)
+                {
+                    user.AiGenerationsCount = 0;
+                    user.LastAiGenerationDate = today;
+                }
+
+                if (user.AiGenerationsCount >= ProDailyLimit)
+                {
+                    return BadRequest(new { code = "LimitReached", message = "Daily generation limit reached for Pro users." });
+                }
+            }
+            else
+            {
+                // Total limit for Free
+                if (user.AiGenerationsCount >= FreeTotalLimit)
+                {
+                    return BadRequest(new { code = "ProRequired", message = "Free generation limit reached. Upgrade to Pro for daily generations!" });
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+            {
+                return BadRequest("Prompt cannot be empty.");
+            }
+
+            try
+            {
+                var habits = await aiService.GenerateHabitRoutineAsync(request.Prompt);
+
+                // Increment and save - using a more direct approach to ensure persistence
+                user.AiGenerationsCount++;
+                user.LastAiGenerationDate = DateTime.UtcNow;
+                
+                _context.Users.Update(user);
+                await _context.SaveChangesAsync();
+
+                int remaining = isCurrentlyPro ? (ProDailyLimit - user.AiGenerationsCount) : (FreeTotalLimit - user.AiGenerationsCount);
+
+                return Ok(new { 
+                    habits = habits, 
+                    aiGenerationsRemaining = remaining,
+                    isPro = isCurrentlyPro,
+                    aiTotalLimit = isCurrentlyPro ? ProDailyLimit : FreeTotalLimit
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to generate routine", error = ex.Message });
+            }
+        }
     }
 
     // ── request DTO ──────────────────────────────────────────────────────────
@@ -607,4 +751,6 @@ namespace HabitTrackerApi.Controllers
     public record FcmTokenDto(string Token);
     public record NotificationSettingsDto(bool Enabled, int Frequency);
     public record ForgotPasswordDto(string Email);
+    public record AppUsageDto(string Date, int SecondsSpent);
+    public record GenerateRoutineRequest(string Prompt);
 }

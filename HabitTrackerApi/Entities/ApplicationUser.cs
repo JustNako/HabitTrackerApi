@@ -13,6 +13,11 @@ public class ApplicationUser : IdentityUser
     public string? FcmToken { get; set; }         // Firebase push notification token
     public bool ReminderEnabled { get; set; } = false;
     public int ReminderFrequency { get; set; } = 1;  // 1 = once a day, 2 = twice a day
+    
+    // AI Generation Tracking
+    public int AiGenerationsCount { get; set; } = 0;
+    public DateTime? LastAiGenerationDate { get; set; }
+
     public List<Friendship> SentRequests { get; set; } = [];
     public List<Friendship> ReceivedRequests { get; set; } = [];
 }

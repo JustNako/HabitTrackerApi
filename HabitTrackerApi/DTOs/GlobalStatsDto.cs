@@ -23,6 +23,10 @@ public class GlobalStatsDto
     public int BestStreak { get; set; }
     public int ActiveDays { get; set; }
     public bool IsPro { get; set; }
+    
+    // AI Generation Stats
+    public int AiGenerationsRemaining { get; set; }
+    public int AiTotalLimit { get; set; }
 
     public List<MonthlyProgressDto> MonthlyProgress { get; set; } = new();
     public List<WeeklyProgressDto> WeeklyCompletionRate { get; set; } = new();

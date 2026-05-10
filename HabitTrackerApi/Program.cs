@@ -162,7 +162,7 @@ builder.Services.AddScoped<AchievementEvaluatorService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpClient<AiService>();
-builder.Services.AddHostedService<HabitReminderService>(); // Daily habit reminder scheduler
+builder.Services.AddScoped<HabitReminderService>(); // Changed from HostedService so it can be called via JobsController
 
 // Firebase Admin SDK
 var firebaseKeyPath = Path.Combine(builder.Environment.ContentRootPath,
@@ -190,15 +190,15 @@ using (var scope = app.Services.CreateScope())
 // Pipeline
 app.UseExceptionHandler();
 app.UseRateLimiter(); // Apply rate limiting before static files and routing
+app.UseDefaultFiles(); // serves index.html at root "/"
 app.UseStaticFiles();
 
-
-
-app.UseSwagger();
-app.UseSwaggerUI();
-
-
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+else
 {
     app.UseHsts();
     app.UseHttpsRedirection();

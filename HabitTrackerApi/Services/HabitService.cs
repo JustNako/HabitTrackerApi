@@ -51,7 +51,7 @@ public class HabitService
         return Result.Success(dtos);
     }
 
-    private const int FreeHabitLimit = 3;
+    private const int FreeHabitLimit = 10;
 
     public async Task<Result> CreateHabit(string userId, CreateHabitDto dto)
     {
@@ -311,6 +311,30 @@ public class HabitService
         }
 
         var user = await _userManager.FindByIdAsync(userId);
+        bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
+        // Calculate AI limits for the response
+        int aiRemaining = 0;
+        int aiTotalLimit = isCurrentlyPro ? 5 : 2;
+
+        if (user != null)
+        {
+            if (isCurrentlyPro)
+            {
+                var today = DateTime.UtcNow.Date;
+                int currentCount = user.AiGenerationsCount;
+                if (user.LastAiGenerationDate?.Date != today)
+                {
+                    currentCount = 0; // It would be reset on next call, but let's show correctly now
+                }
+                aiRemaining = Math.Max(0, 5 - currentCount);
+            }
+            else
+            {
+                aiRemaining = Math.Max(0, 2 - user.AiGenerationsCount);
+            }
+        }
+
         return Result.Success(new GlobalStatsDto
         {
             TotalHabits = totalHabits,
@@ -323,7 +347,9 @@ public class HabitService
             ActiveDays = activeDays,
             MonthlyProgress = monthlyProgress,
             WeeklyCompletionRate = weeklyCompletionRate,
-            IsPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow)
+            IsPro = isCurrentlyPro,
+            AiGenerationsRemaining = aiRemaining,
+            AiTotalLimit = aiTotalLimit
         });
     }
 

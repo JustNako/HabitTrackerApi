@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore;
 namespace HabitTrackerApi.Services;
 
 /// <summary>
-/// Background service that sends daily/twice-daily habit reminders to all
-/// users who have reminders enabled and still have incomplete habits today.
+/// Scoped service that sends habit reminders to all
+/// users who have reminders enabled and still have incomplete habits.
+/// Triggered via JobsController.
 /// </summary>
-public class HabitReminderService : BackgroundService
+public class HabitReminderService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<HabitReminderService> _logger;
@@ -26,42 +27,8 @@ public class HabitReminderService : BackgroundService
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("HabitReminderService started.");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            var now = DateTime.UtcNow;
-            var nextRun = GetNextScheduledTime(now);
-            var delay = nextRun - now;
-
-            _logger.LogInformation("Next reminder batch at {NextRun} UTC (in {Delay})", nextRun, delay);
-
-            await Task.Delay(delay, stoppingToken);
-            if (stoppingToken.IsCancellationRequested) break;
-
-            await SendRemindersAsync(nextRun.Hour, stoppingToken);
-        }
-    }
-
-    /// <summary>Returns the next scheduled reminder time after <paramref name="now"/>.</summary>
-    private static DateTime GetNextScheduledTime(DateTime now)
-    {
-        var today = now.Date;
-
-        foreach (var schedule in _schedules)
-        {
-            var candidate = today + schedule;
-            if (candidate > now) return candidate;
-        }
-
-        // All today's slots passed — first slot of tomorrow
-        return today.AddDays(1) + _schedules[0];
-    }
-
-    private async Task SendRemindersAsync(int hour, CancellationToken ct)
+    
+    public async Task SendRemindersAsync(int hour, CancellationToken ct = default)
     {
         _logger.LogInformation("Sending habit reminders (slot {Hour}:00 UTC)…", hour);
 
@@ -86,16 +53,36 @@ public class HabitReminderService : BackgroundService
                 if (user.ReminderFrequency == 1 && hour == 18) continue;
 
                 // Check if the user has any habit that is NOT completed today
-                var hasIncomplete = await db.Habits
+                var incompleteHabits = await db.Habits
                     .Where(h => h.UserId == user.Id && !h.IsDeleted)
-                    .AnyAsync(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted), ct);
+                    .Where(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted))
+                    .Select(h => h.Title)
+                    .ToListAsync(ct);
 
-                if (!hasIncomplete) continue; // All habits done — no need to annoy them
+                if (incompleteHabits.Count == 0) continue; // All habits done
+
+                string title = "⚡ Keep your streak alive!";
+                string body = "You still have habits to complete today. Open Flow and knock them out!";
+
+                // 🔥 Premium Feature: AI-Generated Personalized Push Notifications
+                if (user.IsPro)
+                {
+                    try
+                    {
+                        var aiService = scope.ServiceProvider.GetRequiredService<AiService>();
+                        string prompt = $"Uncompleted habits: {string.Join(", ", incompleteHabits)}";
+                        body = await aiService.GenerateNotificationMessageAsync(prompt);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning("Failed to generate AI notification for user {UserId}: {Message}", user.Id, ex.Message);
+                    }
+                }
 
                 await notifications.SendAsync(
                     fcmToken: user.FcmToken!,
-                    title: "⚡ Keep your streak alive!",
-                    body: "You still have habits to complete today. Open Flow and knock them out!",
+                    title: title,
+                    body: body,
                     data: new Dictionary<string, string> { ["type"] = "reminder" }
                 );
                 sent++;

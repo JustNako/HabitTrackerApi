@@ -64,6 +64,7 @@ public class NotificationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send FCM notification to token {Token}", fcmToken[..Math.Min(20, fcmToken.Length)]);
+            throw; // Re-throw to inform the client
         }
     }
 }

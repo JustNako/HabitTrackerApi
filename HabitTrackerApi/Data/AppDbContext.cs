@@ -10,6 +10,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<HabitLog> HabitLogs {get;set;}
     public DbSet<Friendship> Friendships {get;set;}
     public DbSet<UserAchievement> UserAchievements {get;set;}
+    public DbSet<AppUsage> AppUsages {get;set;}
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
