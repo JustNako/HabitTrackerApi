@@ -10,6 +10,7 @@ public class Habit
     
     public required string Title { get; set; }
     public string? Description { get; set; }
+    public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public int TargetDays { get; set; }
     public HabitRepeatType RepeatType { get; set; } = HabitRepeatType.EveryDay;

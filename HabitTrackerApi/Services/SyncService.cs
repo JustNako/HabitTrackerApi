@@ -42,6 +42,7 @@ public class SyncService
                 Id = h.Id,
                 Title = h.Title,
                 Description = h.Description,
+                Notes = h.Notes,
                 CreatedAt = h.CreatedAt,
                 TargetDays = h.TargetDays,
                 RepeatType = h.RepeatType,
@@ -83,6 +84,7 @@ public class SyncService
                 {
                     existingHabit.Title = syncHabit.Title;
                     existingHabit.Description = syncHabit.Description;
+                    existingHabit.Notes = syncHabit.Notes;
                     existingHabit.TargetDays = syncHabit.TargetDays;
                     existingHabit.RepeatType = syncHabit.RepeatType;
                     existingHabit.RepeatDaysOfWeek = syncHabit.RepeatDaysOfWeek;
@@ -103,6 +105,7 @@ public class SyncService
                     UserId = userId,
                     Title = syncHabit.Title,
                     Description = syncHabit.Description,
+                    Notes = syncHabit.Notes,
                     CreatedAt = syncHabit.CreatedAt,
                     TargetDays = syncHabit.TargetDays,
                     RepeatType = syncHabit.RepeatType,
@@ -123,6 +126,14 @@ public class SyncService
             .Where(l => l.Habit.UserId == userId && logIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id);
 
+        var habitIdsInRequest = request.HabitLogs.Select(l => l.HabitId).Distinct().ToList();
+        var habitsInDb = await _context.Habits.IgnoreQueryFilters()
+            .Where(h => h.UserId == userId && habitIdsInRequest.Contains(h.Id))
+            .Select(h => h.Id)
+            .ToListAsync();
+        var habitIdSet = new HashSet<Guid>(habitsInDb);
+        var newHabitIdsInRequest = new HashSet<Guid>(request.Habits.Select(h => h.Id));
+
         foreach (var syncLog in request.HabitLogs)
         {
             if (existingLogs.TryGetValue(syncLog.Id, out var existingLog))
@@ -139,9 +150,8 @@ public class SyncService
             }
             else
             {
-                var habitExists = await _context.Habits.IgnoreQueryFilters()
-                    .AnyAsync(h => h.Id == syncLog.HabitId && h.UserId == userId);
-                bool newHabitIncluded = request.Habits.Any(h => h.Id == syncLog.HabitId);
+                bool habitExists = habitIdSet.Contains(syncLog.HabitId);
+                bool newHabitIncluded = newHabitIdsInRequest.Contains(syncLog.HabitId);
 
                 if (habitExists || newHabitIncluded)
                 {

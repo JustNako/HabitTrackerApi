@@ -232,6 +232,59 @@ Example for flexible schedule:
         }
     }
 
+    public async Task<string> GenerateMonthlyRecapInsightAsync(string prompt)
+    {
+        var url = "https://api.groq.com/openai/v1/chat/completions";
+
+        var requestBody = new
+        {
+            model = Model,
+            messages = new[]
+            {
+                new
+                {
+                    role = "system",
+                    content = "You are a world-class High-Performance Coach. You are summarizing a user's progress for the past month. Your goal is to provide a concise, powerful, and empathetic insight (2-3 sentences) that highlights a win and suggests one area for growth. Do NOT mention specific numbers from the prompt. Focus on behavioral patterns and mindset. Use a professional yet encouraging tone."
+                },
+                new
+                {
+                    role = "user",
+                    content = prompt
+                }
+            },
+            temperature = 0.8,
+            max_tokens = 200
+        };
+
+        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+        request.Content = content;
+
+        try
+        {
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return "You did a great job this month! Keep pushing towards your goals.";
+
+            var responseString = await response.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(responseString);
+
+            var text = document.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
+
+            return text?.Trim() ?? "Focus on consistency to unlock your true potential next month.";
+        }
+        catch
+        {
+            return "Focus on consistency to unlock your true potential next month.";
+        }
+    }
+
     private static List<string> DefaultInsights() => new()
     {
         "Keep building momentum — every day counts!",

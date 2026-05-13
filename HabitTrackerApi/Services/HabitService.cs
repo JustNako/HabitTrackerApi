@@ -37,6 +37,8 @@ public class HabitService
         {
             Id = h.Id,
             Title = h.Title,
+            Description = h.Description,
+            Notes = h.Notes,
             TargetDays = h.TargetDays,
             CompletedDays = h.Logs.Count(l => l.IsCompleted),
             RepeatType = h.RepeatType,
@@ -76,6 +78,7 @@ public class HabitService
             Id = Guid.NewGuid(),
             Title = dto.Title,
             Description = dto.Description,
+            Notes = dto.Notes,
             TargetDays = dto.TargetDays,
             RepeatType = dto.RepeatType,
             RepeatDaysOfWeek = ToDayOfWeekCsv(dto.RepeatDaysOfWeek),
@@ -91,6 +94,21 @@ public class HabitService
 
         // Evaluate achievements
         await _achievements.EvaluateUserAsync(userId);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> UpdateHabitNotes(Guid id, string userId, string? notes)
+    {
+        var habit = await _context.Habits.FirstOrDefaultAsync(h => h.Id == id && h.UserId == userId);
+        if (habit == null)
+            return Result.Failure(Error.NotFound);
+
+        habit.Notes = notes;
+        habit.UpdatedAt = DateTime.UtcNow;
+
+        _context.Entry(habit).State = EntityState.Modified;
+        await _repo.Save();
 
         return Result.Success();
     }
@@ -650,5 +668,98 @@ public class HabitService
             user.IsPro = false;
             await _userManager.UpdateAsync(user);
         }
+    }
+    public async Task<Result<MonthlyRecapDto>> GetMonthlyRecapAsync(string userId, int year, int month)
+    {
+        var startDate = new DateTime(year, month, 1);
+        var endDate = startDate.AddMonths(1).AddDays(-1);
+
+        var habits = await _context.Habits
+            .Include(h => h.Logs.Where(l => l.Date >= startDate && l.Date <= endDate && !l.IsDeleted))
+            .Where(h => h.UserId == userId && !h.IsDeleted)
+            .ToListAsync();
+
+        if (habits.Count == 0)
+            return Result.Failure<MonthlyRecapDto>(new Error("NoData", "No habits found for this period."));
+
+        var recap = new MonthlyRecapDto
+        {
+            MonthName = startDate.ToString("MMMM yyyy"),
+            CompletedDaysCount = habits.Sum(h => h.Logs.Count(l => l.IsCompleted))
+        };
+
+        foreach (var habit in habits)
+        {
+            var logs = habit.Logs.OrderBy(l => l.Date).ToList();
+            var completedLogs = logs.Where(l => l.IsCompleted).ToList();
+            
+            // Basic completion rate calculation (Completions / Total expected days in month)
+            // For simplicity, we compare to the total days in month, but ideally, we should check RepeatType logic.
+            int totalDaysInMonth = DateTime.DaysInMonth(year, month);
+            int rate = (int)((double)completedLogs.Count / totalDaysInMonth * 100);
+
+            // Streak calculation within the month
+            int bestStreak = 0;
+            int currentStreak = 0;
+            DateTime? lastDate = null;
+
+            foreach (var log in completedLogs)
+            {
+                if (lastDate == null || (log.Date.Date - lastDate.Value.Date).Days == 1)
+                {
+                    currentStreak++;
+                }
+                else
+                {
+                    currentStreak = 1;
+                }
+                lastDate = log.Date;
+                if (currentStreak > bestStreak) bestStreak = currentStreak;
+            }
+
+            recap.HabitSummaries.Add(new HabitSummaryDto
+            {
+                Title = habit.Title,
+                CompletionRate = rate,
+                BestStreak = bestStreak
+            });
+        }
+
+        // Best & Worst habit of the month
+        if (recap.HabitSummaries.Count > 0)
+        {
+            recap.TotalCompletionRate = (int)recap.HabitSummaries.Average(s => s.CompletionRate);
+            recap.BestHabit  = recap.HabitSummaries.OrderByDescending(s => s.CompletionRate).First().Title;
+            recap.WorstHabit = recap.HabitSummaries.OrderBy(s => s.CompletionRate).First().Title;
+
+            // Only set WorstHabit if it differs from BestHabit (i.e. more than one habit)
+            if (recap.BestHabit == recap.WorstHabit)
+                recap.WorstHabit = null;
+        }
+
+        // Previous month comparison
+        var prevStart = startDate.AddMonths(-1);
+        var prevEnd   = startDate.AddDays(-1);
+        var prevHabits = await _context.Habits
+            .Include(h => h.Logs.Where(l => l.Date >= prevStart && l.Date <= prevEnd && !l.IsDeleted))
+            .Where(h => h.UserId == userId && !h.IsDeleted)
+            .ToListAsync();
+
+        if (prevHabits.Count > 0)
+        {
+            int prevDays = DateTime.DaysInMonth(prevStart.Year, prevStart.Month);
+            var prevRates = prevHabits.Select(h =>
+                (int)((double)h.Logs.Count(l => l.IsCompleted) / prevDays * 100));
+            recap.PreviousMonthRate = (int)prevRates.Average();
+        }
+
+        // AI Insight
+        var aiPrompt = $"Monthly Progress: {recap.TotalCompletionRate}% overall completion. " +
+                       $"Total completions: {recap.CompletedDaysCount}. " +
+                       $"Top streaks: {string.Join(", ", recap.HabitSummaries.Select(s => $"{s.Title}: {s.BestStreak} days"))}.";
+
+        recap.AiInsight = await _aiService.GenerateMonthlyRecapInsightAsync(aiPrompt);
+
+        return Result.Success(recap);
     }
 }

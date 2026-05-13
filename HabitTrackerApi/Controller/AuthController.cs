@@ -102,6 +102,12 @@ namespace HabitTrackerApi.Controllers
             if (!user.EmailConfirmed)
                 return Unauthorized(new { message = "email_not_confirmed", email = user.Email });
 
+            if (request.TimeZoneOffset.HasValue)
+            {
+                user.TimeZoneOffset = request.TimeZoneOffset.Value;
+                await _userManager.UpdateAsync(user);
+            }
+
             var token = GenerateToken(user);
 
             return Ok(new { token });
@@ -747,7 +753,7 @@ namespace HabitTrackerApi.Controllers
     // ── request DTO ──────────────────────────────────────────────────────────
 
     public record UpgradeRequest(string Plan);
-    public record LoginRequest(string Username, string Password);
+    public record LoginRequest(string Username, string Password, int? TimeZoneOffset);
     public record FcmTokenDto(string Token);
     public record NotificationSettingsDto(bool Enabled, int Frequency);
     public record ForgotPasswordDto(string Email);

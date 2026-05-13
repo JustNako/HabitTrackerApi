@@ -190,6 +190,26 @@ public class HabitsController : ControllerBase
     }
 
 
+    [HttpPatch("{id}/notes")]
+    public async Task<IActionResult> UpdateNotes(Guid id, [FromBody] UpdateHabitNotesDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var result = await _service.UpdateHabitNotes(id, userId, dto.Notes);
+
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok();
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {

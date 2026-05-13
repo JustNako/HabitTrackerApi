@@ -9,6 +9,7 @@ public class CreateHabitDto
     [MaxLength(30, ErrorMessage = "Title must be 30 characters or fewer.")]
     public string Title { get; set; }    
     public string? Description { get; set; }
+    public string? Notes { get; set; }
     public int TargetDays { get; set; }
     public HabitRepeatType RepeatType { get; set; } = HabitRepeatType.EveryDay;
     public List<DayOfWeek>? RepeatDaysOfWeek { get; set; }

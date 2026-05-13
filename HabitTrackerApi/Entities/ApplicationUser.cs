@@ -13,6 +13,7 @@ public class ApplicationUser : IdentityUser
     public string? FcmToken { get; set; }         // Firebase push notification token
     public bool ReminderEnabled { get; set; } = false;
     public int ReminderFrequency { get; set; } = 1;  // 1 = once a day, 2 = twice a day
+    public int TimeZoneOffset { get; set; } = 0;    // Offset in minutes from UTC (e.g., +120 for GMT+2)
     
     // AI Generation Tracking
     public int AiGenerationsCount { get; set; } = 0;

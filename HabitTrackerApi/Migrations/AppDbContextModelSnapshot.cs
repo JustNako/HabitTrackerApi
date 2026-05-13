@@ -118,6 +118,9 @@ namespace HabitTrackerApi.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("TimeZoneOffset")
+                        .HasColumnType("int");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -184,6 +187,9 @@ namespace HabitTrackerApi.Migrations
 
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RepeatDaysOfMonth")
                         .HasColumnType("nvarchar(max)");
