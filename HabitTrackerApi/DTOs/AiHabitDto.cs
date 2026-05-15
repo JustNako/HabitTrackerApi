@@ -16,4 +16,5 @@ public class AiHabitDto
     public int? RepeatTimesPerPeriod { get; set; }
     
     public int TargetDays { get; set; } = 1;
+    public string? Unit { get; set; }
 }

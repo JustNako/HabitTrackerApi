@@ -13,6 +13,7 @@ public class Habit
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public int TargetDays { get; set; }
+    public string? Unit { get; set; }
     public HabitRepeatType RepeatType { get; set; } = HabitRepeatType.EveryDay;
     public string? RepeatDaysOfWeek { get; set; }
     public string? RepeatDaysOfMonth { get; set; }

@@ -47,7 +47,8 @@ public class HabitService
             RepeatTimesPerPeriod = h.RepeatTimesPerPeriod,
             RepeatPeriod = h.RepeatPeriod,
             IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == DateTime.UtcNow.Date),
-            IsPublic = h.IsPublic
+            IsPublic = h.IsPublic,
+            Unit = h.Unit
         }).ToList();
 
         return Result.Success(dtos);
@@ -86,7 +87,8 @@ public class HabitService
             RepeatTimesPerPeriod = dto.RepeatTimesPerPeriod,
             RepeatPeriod = dto.RepeatPeriod,
             IsPublic = dto.IsPublic,
-            UserId = userId
+            UserId = userId,
+            Unit = dto.Unit
         };
 
         await _repo.Add(habit);

@@ -52,7 +52,8 @@ public class SyncService
                 RepeatPeriod = h.RepeatPeriod,
                 UpdatedAt = h.UpdatedAt,
                 IsDeleted = h.IsDeleted,
-                IsPublic = h.IsPublic
+                IsPublic = h.IsPublic,
+                Unit = h.Unit
             }).ToList(),
             HabitLogs = logs.Select(l => new SyncHabitLogDto
             {
@@ -94,6 +95,7 @@ public class SyncService
                     existingHabit.UpdatedAt = syncHabit.UpdatedAt;
                     existingHabit.IsDeleted = syncHabit.IsDeleted;
                     existingHabit.IsPublic = syncHabit.IsPublic;
+                    existingHabit.Unit = syncHabit.Unit;
                     _context.Entry(existingHabit).State = EntityState.Modified;
                 }
             }
@@ -115,7 +117,8 @@ public class SyncService
                     RepeatPeriod = syncHabit.RepeatPeriod,
                     UpdatedAt = syncHabit.UpdatedAt,
                     IsDeleted = syncHabit.IsDeleted,
-                    IsPublic = syncHabit.IsPublic
+                    IsPublic = syncHabit.IsPublic,
+                    Unit = syncHabit.Unit
                 };
                 _context.Habits.Add(newHabit);
             }
