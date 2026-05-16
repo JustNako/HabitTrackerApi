@@ -91,12 +91,17 @@ public class WebhooksController : ControllerBase
                 break;
 
             // ── Inactive subscription events ───────────────────────────────
-            case "CANCELLATION":
             case "EXPIRATION":
             case "BILLING_ISSUE":
                 user.IsPro = false;
                 user.ProExpiration = DateTime.UtcNow;
                 _logger.LogInformation("User {UserId} Pro access revoked (event: {Type})", user.Id, eventType);
+                break;
+
+            case "CANCELLATION":
+                // CANCELLATION only means they turned off auto-renew.
+                // They should keep Pro until it actually expires, so we do nothing here.
+                _logger.LogInformation("User {UserId} disabled auto-renew, but keeps Pro until {Exp}", user.Id, user.ProExpiration);
                 break;
 
             default:

@@ -29,31 +29,27 @@ public class NotificationService
 
         try
         {
+            // We send title/body in Data payload for Android so Flutter can construct an interactive local notification.
+            var payloadData = data ?? new Dictionary<string, string>();
+            payloadData["title"] = title;
+            payloadData["body"] = body;
+
             var message = new Message
             {
                 Token = fcmToken,
-                Notification = new Notification
-                {
-                    Title = title,
-                    Body = body,
-                },
-                Data = data ?? new Dictionary<string, string>(),
-                Android = new AndroidConfig
-                {
-                    Priority = Priority.High,
-                    Notification = new AndroidNotification
-                    {
-                        ChannelId = "flow_channel",
-                        Color = "#FF512F",
-                        Sound = "default",
-                    }
-                },
+                Data = payloadData,
                 Apns = new ApnsConfig
                 {
                     Aps = new Aps
                     {
+                        Alert = new ApsAlert
+                        {
+                            Title = title,
+                            Body = body
+                        },
                         Sound = "default",
                         Badge = 1,
+                        Category = "HABIT_ACTION"
                     }
                 }
             };

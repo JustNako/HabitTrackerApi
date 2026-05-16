@@ -58,13 +58,12 @@ public class HabitService
 
     public async Task<Result> CreateHabit(string userId, CreateHabitDto dto)
     {
-        await SyncProStatus(userId);
+        var user = await SyncProStatusAndGetUser(userId);
         var validationResult = ValidateRepeatSettings(dto);
         if (validationResult.IsFailure)
             return validationResult;
 
         // ── Pro tier check ─────────────────────────────────────────────────
-        var user = await _userManager.FindByIdAsync(userId);
         bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
 
         if (!isCurrentlyPro)
@@ -194,27 +193,29 @@ public class HabitService
         if (!habitExists)
             return Result.Failure<int>(Error.NotFound);
 
-        var logs = await _context.HabitLogs
+        var logsDates = await _context.HabitLogs
+            .AsNoTracking()
             .Where(l => l.HabitId == habitId && l.IsCompleted)
             .OrderByDescending(l => l.Date)
+            .Select(l => l.Date)
             .ToListAsync();
 
         int streak = 0;
         var expected = DateTime.UtcNow.Date;
 
-        foreach (var log in logs)
+        foreach (var logDate in logsDates)
         {
-            if (log.Date == expected)
+            if (logDate == expected)
             {
                 streak++;
                 expected = expected.AddDays(-1);
             }
-            else if (log.Date < expected)
+            else if (logDate < expected)
             {
                 // Пропуск в серии — стрик прерван
                 break;
             }
-            // log.Date > expected — дубликат за тот же день, пропускаем
+            // logDate > expected — дубликат за тот же день, пропускаем
         }
 
         return Result.Success(streak);
@@ -223,7 +224,7 @@ public class HabitService
     public async Task<Result<int>> GetGlobalStreak(string userId)
     {
         var completedDates = await _context.HabitLogs
-            .Include(l => l.Habit)
+            .AsNoTracking()
             .Where(l => l.Habit.UserId == userId && l.IsCompleted)
             .Select(l => l.Date.Date)
             .Distinct()
@@ -256,30 +257,36 @@ public class HabitService
 
     public async Task<Result<GlobalStatsDto>> GetGlobalStats(string userId)
     {
-        await SyncProStatus(userId);
-        var habits = await _context.Habits.Where(h => h.UserId == userId).ToListAsync();
-        var logs = await _context.HabitLogs.Include(l => l.Habit).Where(l => l.Habit.UserId == userId && l.IsCompleted).ToListAsync();
-
-        int totalHabits = habits.Count;
-        int totalCompletions = logs.Count;
+        var user = await SyncProStatusAndGetUser(userId);
+        
+        int totalHabits = await _context.Habits.CountAsync(h => h.UserId == userId);
+        int totalCompletions = await _context.HabitLogs.CountAsync(l => l.Habit.UserId == userId && l.IsCompleted);
         int globalStreak = (await GetGlobalStreak(userId)).Value;
+
+        // Fetch minimal data for calculations
+        var completedDatesByHabit = await _context.HabitLogs
+            .AsNoTracking()
+            .Where(l => l.Habit.UserId == userId && l.IsCompleted)
+            .Select(l => new { l.HabitId, l.Date })
+            .ToListAsync();
 
         // Completion Rate (simple % of completions per habit)
         double completionRate = totalHabits == 0 ? 0 : Math.Round((double)totalCompletions / totalHabits, 2);
 
         // Active Days – distinct dates with any completed habit
-        int activeDays = logs.Select(l => l.Date.Date).Distinct().Count();
+        int activeDays = completedDatesByHabit.Select(l => l.Date.Date).Distinct().Count();
 
         // Best Streak – longest streak among all habits
         int bestStreak = 0;
-        foreach (var habit in habits)
+        var groupedByHabit = completedDatesByHabit.GroupBy(l => l.HabitId);
+        foreach (var group in groupedByHabit)
         {
-            var habitLogs = logs.Where(l => l.HabitId == habit.Id && l.IsCompleted).ToList();
-            var longest = CalculateLongestStreak(habitLogs);
+            var datesOnly = group.Select(x => new HabitLog { Date = x.Date }).ToList();
+            var longest = CalculateLongestStreak(datesOnly);
             if (longest > bestStreak) bestStreak = longest;
         }
 
-        var bestHabitGroup = logs.GroupBy(l => l.HabitId)
+        var bestHabitGroup = groupedByHabit
                                  .OrderByDescending(g => g.Count())
                                  .FirstOrDefault();
 
@@ -289,7 +296,11 @@ public class HabitService
         if (bestHabitGroup != null)
         {
             bestHabitCompletions = bestHabitGroup.Count();
-            bestHabitName = habits.FirstOrDefault(h => h.Id == bestHabitGroup.Key)?.Title ?? "None";
+            bestHabitName = await _context.Habits
+                .AsNoTracking()
+                .Where(h => h.Id == bestHabitGroup.Key)
+                .Select(h => h.Title)
+                .FirstOrDefaultAsync() ?? "None";
         }
 
         // Monthly Progress (Last 6 months)
@@ -298,7 +309,7 @@ public class HabitService
         {
             var targetMonth = DateTime.UtcNow.AddMonths(-i);
             var monthName = targetMonth.ToString("MMM");
-            var count = logs.Count(l => l.Date.Year == targetMonth.Year && l.Date.Month == targetMonth.Month);
+            var count = completedDatesByHabit.Count(l => l.Date.Year == targetMonth.Year && l.Date.Month == targetMonth.Month);
             monthlyProgress.Add(new MonthlyProgressDto { Month = monthName, Completions = count });
         }
 
@@ -315,7 +326,7 @@ public class HabitService
             var startOfWeek = currentMonday.AddDays(-(i * 7));
             var endOfWeek = startOfWeek.AddDays(6).AddHours(23).AddMinutes(59);
             
-            var weeklyLogsCount = logs.Count(l => l.Date >= startOfWeek && l.Date <= endOfWeek);
+            var weeklyLogsCount = completedDatesByHabit.Count(l => l.Date >= startOfWeek && l.Date <= endOfWeek);
             
             // Total possible completions = habits count * 7 days
             int possibleCompletions = totalHabits * 7;
@@ -330,7 +341,6 @@ public class HabitService
             weeklyCompletionRate.Add(new WeeklyProgressDto { Week = weekLabel, Rate = rate });
         }
 
-        var user = await _userManager.FindByIdAsync(userId);
         bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
 
         // Calculate AI limits for the response
@@ -375,8 +385,7 @@ public class HabitService
 
     public async Task<Result<List<string>>> GetAiInsights(string userId)
     {
-        await SyncProStatus(userId);
-        var user = await _userManager.FindByIdAsync(userId);
+        var user = await SyncProStatusAndGetUser(userId);
         bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
 
         if (!isCurrentlyPro)
@@ -387,6 +396,7 @@ public class HabitService
         var startDate = DateTime.UtcNow.Date.AddDays(-7);
         
         var habits = await _context.Habits
+            .AsNoTracking()
             .Include(h => h.Logs.Where(l => l.Date >= startDate))
             .Where(h => h.UserId == userId && !h.IsDeleted)
             .ToListAsync();
@@ -445,17 +455,17 @@ public class HabitService
         if (!habitExists)
             return Result.Failure<HabitStatsDto>(Error.NotFound);
 
-        var logs = await _context.HabitLogs
-            .Where(l => l.HabitId == habitId)
-            .OrderBy(l => l.Date)
+        int totalDays = await _context.HabitLogs.CountAsync(l => l.HabitId == habitId);
+        int completedDays = await _context.HabitLogs.CountAsync(l => l.HabitId == habitId && l.IsCompleted);
+
+        var completedDates = await _context.HabitLogs
+            .AsNoTracking()
+            .Where(l => l.HabitId == habitId && l.IsCompleted)
+            .Select(l => l.Date)
+            .OrderBy(d => d)
             .ToListAsync();
 
         var today = DateTime.UtcNow.Date;
-
-        var completedLogs = logs.Where(l => l.IsCompleted).ToList();
-
-        int totalDays = logs.Count;
-        int completedDays = completedLogs.Count;
 
         double completionRate = totalDays == 0 ? 0 : (double)completedDays / totalDays * 100;
 
@@ -463,10 +473,11 @@ public class HabitService
         var currentStreak = await GetStreak(habitId, userId);
 
         //Longest streak
-        var longestStreak = CalculateLongestStreak(completedLogs);
+        var logsForStreak = completedDates.Select(d => new HabitLog { Date = d }).ToList();
+        var longestStreak = CalculateLongestStreak(logsForStreak);
 
         //Today
-        bool isCompletedToday = logs.Any(l => l.Date == today && l.IsCompleted);
+        bool isCompletedToday = completedDates.Any(d => d == today);
 
         return Result.Success(new HabitStatsDto
         {
@@ -526,20 +537,20 @@ public class HabitService
         var startDate = DateTime.UtcNow.Date.AddDays(-30);
         var endDate = DateTime.UtcNow.Date;
 
-        var logs = await _context.HabitLogs
-            .Where(l => l.HabitId == habitId && l.Date >= startDate && l.Date <= endDate)
+        var completedDates = await _context.HabitLogs
+            .AsNoTracking()
+            .Where(l => l.HabitId == habitId && l.Date >= startDate && l.Date <= endDate && l.IsCompleted)
+            .Select(l => l.Date)
             .ToListAsync();
 
         var result = new List<HabitHeatmapDto>();
 
         for (var date = startDate; date  <= endDate; date = date.AddDays(1))
         {
-            var log = logs.FirstOrDefault(l => l.Date == date);
-
             result.Add(new HabitHeatmapDto
             {
                 Date = date,
-                Value = log != null && log.IsCompleted ? 1 : 0
+                Value = completedDates.Contains(date) ? 1 : 0
             });
         }
 
@@ -662,7 +673,7 @@ public class HabitService
             .Select(int.Parse)
             .ToList();
     }
-    private async Task SyncProStatus(string userId)
+    private async Task<ApplicationUser?> SyncProStatusAndGetUser(string userId)
     {
         var user = await _userManager.FindByIdAsync(userId);
         if (user != null && user.IsPro && user.ProExpiration != null && user.ProExpiration < DateTime.UtcNow)
@@ -670,6 +681,7 @@ public class HabitService
             user.IsPro = false;
             await _userManager.UpdateAsync(user);
         }
+        return user;
     }
     public async Task<Result<MonthlyRecapDto>> GetMonthlyRecapAsync(string userId, int year, int month)
     {
@@ -677,6 +689,7 @@ public class HabitService
         var endDate = startDate.AddMonths(1).AddDays(-1);
 
         var habits = await _context.Habits
+            .AsNoTracking()
             .Include(h => h.Logs.Where(l => l.Date >= startDate && l.Date <= endDate && !l.IsDeleted))
             .Where(h => h.UserId == userId && !h.IsDeleted)
             .ToListAsync();
@@ -743,6 +756,7 @@ public class HabitService
         var prevStart = startDate.AddMonths(-1);
         var prevEnd   = startDate.AddDays(-1);
         var prevHabits = await _context.Habits
+            .AsNoTracking()
             .Include(h => h.Logs.Where(l => l.Date >= prevStart && l.Date <= prevEnd && !l.IsDeleted))
             .Where(h => h.UserId == userId && !h.IsDeleted)
             .ToListAsync();

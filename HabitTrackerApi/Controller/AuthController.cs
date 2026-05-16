@@ -620,7 +620,7 @@ namespace HabitTrackerApi.Controllers
             var incompleteHabits = await _context.Habits
                 .Where(h => h.UserId == user.Id && !h.IsDeleted)
                 .Where(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted))
-                .Select(h => h.Title)
+                .Select(h => new { h.Id, h.Title })
                 .ToListAsync();
 
             if (incompleteHabits.Count == 0)
@@ -628,15 +628,26 @@ namespace HabitTrackerApi.Controllers
                 return BadRequest(new { message = "You have completed all habits for today! Add an incomplete habit to test this feature." });
             }
 
+            var habitTitles = incompleteHabits.Select(h => h.Title).ToList();
+
             string title = "⚡ AI Coach Message";
-            string prompt = $"Uncompleted habits: {string.Join(", ", incompleteHabits)}";
+            string prompt = $"Uncompleted habits: {string.Join(", ", habitTitles)}";
             string body = await aiService.GenerateNotificationMessageAsync(prompt);
+
+            var topHabits = incompleteHabits.Take(3).ToList();
+            var habitIdsString = string.Join(",", topHabits.Select(h => h.Id.ToString()));
+            var habitTitlesString = string.Join(",", topHabits.Select(h => h.Title));
 
             await _notificationService.SendAsync(
                 user.FcmToken, 
                 title, 
                 body,
-                new Dictionary<string, string> { { "type", "reminder" } }
+                new Dictionary<string, string> 
+                { 
+                    { "type", "reminder" },
+                    { "habitIds", habitIdsString },
+                    { "habitTitles", habitTitlesString }
+                }
             );
 
             return Ok(new { message = "AI notification sent!", generatedBody = body });

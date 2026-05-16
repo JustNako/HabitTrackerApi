@@ -63,7 +63,7 @@ public class HabitReminderService
                 .Where(h => userIds.Contains(h.UserId) && !h.IsDeleted)
                 .Where(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted))
                 .GroupBy(h => h.UserId)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(h => h.Title).ToList(), ct);
+                .ToDictionaryAsync(g => g.Key, g => g.Select(h => new { h.Id, h.Title }).ToList(), ct);
 
             var sent = 0;
 
@@ -76,6 +76,8 @@ public class HabitReminderService
                 if (!incompleteHabitsMap.TryGetValue(user.Id, out var incompleteHabits) || incompleteHabits.Count == 0) 
                     continue; // All habits done
 
+                var habitTitles = incompleteHabits.Select(h => h.Title).ToList();
+
                 string title = "⚡ Keep your streak alive!";
                 string body = "You still have habits to complete today. Open Flow and knock them out!";
 
@@ -85,7 +87,7 @@ public class HabitReminderService
                     try
                     {
                         var aiService = scope.ServiceProvider.GetRequiredService<AiService>();
-                        string prompt = $"Uncompleted habits: {string.Join(", ", incompleteHabits)}";
+                        string prompt = $"Uncompleted habits: {string.Join(", ", habitTitles)}";
                         body = await aiService.GenerateNotificationMessageAsync(prompt);
                     }
                     catch (Exception ex)
@@ -94,11 +96,21 @@ public class HabitReminderService
                     }
                 }
 
+                // Add up to 3 habits to the payload for interactive buttons
+                var topHabits = incompleteHabits.Take(3).ToList();
+                var habitIdsString = string.Join(",", topHabits.Select(h => h.Id.ToString()));
+                var habitTitlesString = string.Join(",", topHabits.Select(h => h.Title));
+
                 await notifications.SendAsync(
                     fcmToken: user.FcmToken!,
                     title: title,
                     body: body,
-                    data: new Dictionary<string, string> { ["type"] = "reminder" }
+                    data: new Dictionary<string, string> 
+                    { 
+                        ["type"] = "reminder",
+                        ["habitIds"] = habitIdsString,
+                        ["habitTitles"] = habitTitlesString
+                    }
                 );
                 sent++;
             }
