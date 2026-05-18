@@ -126,7 +126,8 @@ namespace HabitTrackerApi.Controllers
             if (!result.Succeeded)
                 return Content(await GetHtmlPageAsync("❌ Confirmation Failed", "This link has already been used or has expired. Please request a new one."), "text/html");
 
-            return Content(await GetHtmlPageAsync("✅ Email Confirmed!", $"Hi {user.UserName}! Your email has been confirmed. You can now log in to Flow."), "text/html");
+            var safeUserName = System.Net.WebUtility.HtmlEncode(user.UserName);
+            return Content(await GetHtmlPageAsync("✅ Email Confirmed!", $"Hi {safeUserName}! Your email has been confirmed. You can now log in to Flow."), "text/html");
         }
 
         [HttpPost("resend-confirmation")]
@@ -267,7 +268,7 @@ namespace HabitTrackerApi.Controllers
 
             if (!result.Succeeded)
             {
-                string errors = string.Join("<br>", result.Errors.Select(e => e.Description));
+                string errors = string.Join("<br>", result.Errors.Select(e => System.Net.WebUtility.HtmlEncode(e.Description)));
                 return Content(await GetHtmlPageAsync("❌ Reset Failed", $"Failed to reset password:<br><br>{errors}"), "text/html");
             }
 
@@ -280,15 +281,15 @@ namespace HabitTrackerApi.Controllers
             if (!System.IO.File.Exists(templatePath))
             {
                 // Fallback basic HTML if template is missing
-                return $"<html><body><h1>{title}</h1><p>{message}</p></body></html>";
+                return $"<html><body><h1>{System.Net.WebUtility.HtmlEncode(title)}</h1><p>{message}</p></body></html>";
             }
 
             var html = await System.IO.File.ReadAllTextAsync(templatePath);
             var icon = title.StartsWith("✅") ? "🎉" : "⚠️";
             
             return html
-                .Replace("{{title}}", title)
-                .Replace("{{icon}}", icon)
+                .Replace("{{title}}", System.Net.WebUtility.HtmlEncode(title))
+                .Replace("{{icon}}", System.Net.WebUtility.HtmlEncode(icon))
                 .Replace("{{message}}", message);
         }
 

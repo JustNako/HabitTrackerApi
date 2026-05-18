@@ -15,7 +15,7 @@ public class AppConfigController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the latest app version and store links to check for updates.
+    /// Returns the latest app version, store links, and runtime SDK keys.
     /// </summary>
     [HttpGet("version")]
     public IActionResult GetVersion()
@@ -25,7 +25,9 @@ public class AppConfigController : ControllerBase
             latestVersion = section["LatestVersion"] ?? "1.0.0",
             minRequiredVersion = section["MinRequiredVersion"] ?? "1.0.0",
             updateUrlAndroid = section["UpdateUrlAndroid"] ?? "https://play.google.com/store/apps/details?id=com.codex.flow",
-            updateUrlIOS = section["UpdateUrlIOS"] ?? "https://apps.apple.com/app/id123456789"
+            updateUrlIOS = section["UpdateUrlIOS"] ?? "https://apps.apple.com/app/id123456789",
+            revenueCatApiKeyAndroid = section["RevenueCatApiKeyAndroid"] ?? "",
+            revenueCatApiKeyIOS = section["RevenueCatApiKeyIOS"] ?? ""
         });
     }
 }

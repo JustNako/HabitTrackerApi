@@ -1,129 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Flow – AI Habit Tracker & Coach</title>
-  <meta name="description"
-    content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
-
-  <!-- Open Graph -->
+  <meta name="description" content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Flow – AI Habit Tracker & Coach">
-  <meta property="og:description"
-    content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
+  <meta property="og:description" content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
   <meta property="og:url" content="https://flowtracks.app">
   <meta property="og:image" content="https://flowtracks.app/og-image.png">
-
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Flow – AI Habit Tracker & Coach">
-  <meta name="twitter:description"
-    content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
+  <meta name="twitter:description" content="Build better habits with an AI Coach. Track progress, compete with friends, and unlock your full potential with Flow.">
   <meta name="twitter:image" content="https://flowtracks.app/og-image.png">
-
-  <!-- Favicon -->
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+
   <style>
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --purple: #DA22FF;
-      --purple2: #9733EE;
-      --orange: #FF512F;
-      --bg: #0C1017;
-      --bg2: #161A22;
-      --bg3: #1E2330;
-      --text: #FFFFFF;
-      --muted: #8A8F9E;
-      --border: rgba(255, 255, 255, 0.07);
+      --plum:    #9B2FD4;
+      --plum2:   #6E1FA3;
+      --coral:   #F05A2A;
+      --amber:   #F5A623;
+      --bg:      #0B0E14;
+      --bg2:     #141820;
+      --bg3:     #1C2030;
+      --surface: rgba(28,32,48,0.65);
+      --text:    #F0EEF8;
+      --muted:   #8B8FA6;
+      --soft:    #B8B4CC;
+      --border:  rgba(255,255,255,0.07);
+      --border2: rgba(155,47,212,0.25);
+      --r-card:  20px;
+      --r-btn:   14px;
     }
 
-    html {
-      scroll-behavior: smooth;
-    }
+    html { scroll-behavior: smooth; }
 
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'DM Sans', sans-serif;
       background: var(--bg);
       color: var(--text);
       overflow-x: hidden;
+      line-height: 1.6;
     }
 
-    /* ── NAV ── */
+    /* ─── Noise texture overlay ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+
+    /* ─── NAV ─── */
     nav {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px 60px;
-      background: rgba(12, 16, 23, 0.8);
-      backdrop-filter: blur(20px);
+      padding: 18px 48px;
+      background: rgba(11,14,20,0.75);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border);
     }
 
     .nav-logo {
+      font-family: 'Fraunces', serif;
       font-size: 22px;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--purple), var(--orange));
+      font-weight: 700;
+      background: linear-gradient(120deg, #c26eff, var(--coral));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
     }
 
     .nav-links {
       display: flex;
-      gap: 36px;
+      gap: 32px;
     }
 
     .nav-links a {
-      color: var(--muted);
+      color: var(--soft);
       text-decoration: none;
       font-size: 14px;
       font-weight: 500;
+      letter-spacing: 0.01em;
       transition: color .2s;
     }
 
-    .nav-links a:hover {
-      color: #fff;
-    }
+    .nav-links a:hover { color: #fff; }
 
     .nav-cta {
-      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      background: linear-gradient(135deg, var(--plum), var(--plum2));
       border: none;
       color: #fff;
-      padding: 10px 24px;
-      border-radius: 12px;
+      padding: 10px 22px;
+      border-radius: var(--r-btn);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity .2s;
       text-decoration: none;
+      transition: opacity .2s, transform .2s;
+      white-space: nowrap;
     }
 
-    .nav-cta:hover {
-      opacity: .85;
+    .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    /* Mobile hamburger */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--soft);
+      border-radius: 2px;
+      transition: all .3s;
     }
 
-    /* ── HERO ── */
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 150;
+      background: rgba(11,14,20,0.97);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    .mobile-menu.open { display: flex; }
+
+    .mobile-menu a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 24px;
+      font-weight: 600;
+      font-family: 'Fraunces', serif;
+      transition: color .2s;
+    }
+    .mobile-menu a:hover { color: #c26eff; }
+
+    .mobile-close {
+      position: absolute;
+      top: 24px; right: 28px;
+      font-size: 28px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    /* ─── HERO ─── */
     .hero {
-      min-height: 100vh;
+      min-height: 100svh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -134,80 +180,64 @@
       overflow: hidden;
     }
 
-    .glow-ball {
+    /* Glow blobs */
+    .blob {
       position: absolute;
       border-radius: 50%;
-      filter: blur(80px);
+      filter: blur(90px);
       pointer-events: none;
+      z-index: 0;
     }
+    .blob-1 { width: 560px; height: 560px; background: rgba(155,47,212,.15); top: -140px; right: -120px; }
+    .blob-2 { width: 420px; height: 420px; background: rgba(240,90,42,.10); bottom: -60px; left: -80px; }
+    .blob-3 { width: 320px; height: 320px; background: rgba(194,110,255,.12); top: 45%; left: 50%; transform: translateX(-50%); }
 
-    .glow-ball.g1 {
-      width: 500px;
-      height: 500px;
-      background: rgba(218, 34, 255, .18);
-      top: -100px;
-      right: -100px;
-    }
+    .hero > * { position: relative; z-index: 1; }
 
-    .glow-ball.g2 {
-      width: 400px;
-      height: 400px;
-      background: rgba(255, 81, 47, .12);
-      bottom: 0;
-      left: -100px;
-    }
-
-    .glow-ball.g3 {
-      width: 300px;
-      height: 300px;
-      background: rgba(151, 51, 238, .15);
-      top: 40%;
-      left: 50%;
-      transform: translateX(-50%);
-    }
-
-    .hero-badge {
+    .hero-eyebrow {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: rgba(218, 34, 255, .1);
-      border: 1px solid rgba(218, 34, 255, .3);
-      color: var(--purple);
+      background: rgba(155,47,212,.12);
+      border: 1px solid rgba(155,47,212,.3);
+      color: #c26eff;
       padding: 6px 16px;
       border-radius: 100px;
       font-size: 13px;
       font-weight: 600;
-      margin-bottom: 28px;
+      margin-bottom: 32px;
       animation: fadeUp .6s ease both;
     }
 
     .hero h1 {
-      font-size: clamp(42px, 7vw, 80px);
-      font-weight: 900;
-      line-height: 1.1;
-      letter-spacing: -2px;
-      margin-bottom: 24px;
+      font-family: 'Fraunces', serif;
+      font-size: clamp(40px, 7vw, 78px);
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -1.5px;
+      margin-bottom: 28px;
       animation: fadeUp .6s .1s ease both;
     }
 
-    .hero h1 span {
-      background: linear-gradient(135deg, var(--purple), var(--orange));
+    .hero h1 em {
+      font-style: italic;
+      background: linear-gradient(120deg, #c26eff, var(--coral));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .hero p {
-      font-size: clamp(16px, 2vw, 20px);
-      color: var(--muted);
-      max-width: 560px;
-      line-height: 1.7;
-      margin-bottom: 48px;
+    .hero-sub {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--soft);
+      max-width: 520px;
+      line-height: 1.75;
+      margin-bottom: 44px;
       animation: fadeUp .6s .2s ease both;
     }
 
     .hero-btns {
       display: flex;
-      gap: 16px;
+      gap: 14px;
       justify-content: center;
       flex-wrap: wrap;
       animation: fadeUp .6s .3s ease both;
@@ -217,851 +247,1155 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      background: linear-gradient(135deg, var(--plum), var(--plum2));
       color: #fff;
-      padding: 16px 32px;
-      border-radius: 16px;
-      font-size: 16px;
+      padding: 15px 30px;
+      border-radius: var(--r-btn);
+      font-size: 15px;
       font-weight: 700;
       text-decoration: none;
-      box-shadow: 0 8px 30px rgba(218, 34, 255, .35);
+      box-shadow: 0 8px 28px rgba(155,47,212,.35);
       transition: transform .2s, box-shadow .2s;
     }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 38px rgba(155,47,212,.5); }
 
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 40px rgba(218, 34, 255, .5);
-    }
-
-    .btn-secondary {
+    .btn-ghost {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, .05);
+      gap: 8px;
+      background: rgba(255,255,255,.05);
       border: 1px solid var(--border);
-      color: #fff;
-      padding: 16px 32px;
-      border-radius: 16px;
-      font-size: 16px;
+      color: var(--soft);
+      padding: 15px 26px;
+      border-radius: var(--r-btn);
+      font-size: 15px;
       font-weight: 600;
       text-decoration: none;
-      transition: background .2s;
+      transition: background .2s, color .2s;
     }
+    .btn-ghost:hover { background: rgba(255,255,255,.09); color: #fff; }
 
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, .1);
-    }
-
-    .hero-stats {
+    /* Social proof strip */
+    .social-proof {
+      margin-top: 60px;
       display: flex;
-      gap: 48px;
-      margin-top: 72px;
+      align-items: center;
       justify-content: center;
+      gap: 36px;
+      flex-wrap: wrap;
       animation: fadeUp .6s .4s ease both;
     }
 
-    .stat {
-      text-align: center;
+    .proof-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
     }
 
-    .stat-num {
-      font-size: 32px;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--purple), var(--orange));
+    .proof-num {
+      font-family: 'Fraunces', serif;
+      font-size: 30px;
+      font-weight: 600;
+      background: linear-gradient(120deg, #c26eff, var(--coral));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      line-height: 1;
     }
 
-    .stat-label {
-      font-size: 13px;
+    .proof-label {
+      font-size: 12px;
       color: var(--muted);
-      margin-top: 4px;
+      letter-spacing: 0.03em;
     }
 
-    /* ── SECTION ── */
-    section {
-      padding: 100px 24px;
+    .proof-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border);
     }
 
-    .container {
-      max-width: 1100px;
-      margin: 0 auto;
-    }
+    /* ─── SECTION UTILS ─── */
+    section { padding: 96px 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
 
-    .section-label {
-      color: var(--purple);
-      font-size: 13px;
+    .section-tag {
+      display: inline-block;
+      color: #c26eff;
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: 2px;
+      letter-spacing: 2.5px;
       text-transform: uppercase;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .section-title {
-      font-size: clamp(32px, 4vw, 52px);
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 16px;
+      font-family: 'Fraunces', serif;
+      font-size: clamp(30px, 4vw, 50px);
+      font-weight: 700;
+      line-height: 1.12;
+      letter-spacing: -0.5px;
+      margin-bottom: 18px;
     }
 
-    .section-sub {
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.7;
-      max-width: 540px;
+    .section-body {
+      color: var(--soft);
+      font-size: 17px;
+      line-height: 1.75;
+      max-width: 520px;
     }
 
-    /* ── FEATURES ── */
+    /* ─── FEATURES ─── */
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      margin-top: 64px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 60px;
     }
 
-    .feature-card {
-      background: rgba(22, 26, 34, 0.6);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+    .feat-card {
+      background: var(--surface);
+      backdrop-filter: blur(14px);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 32px;
-      transition: border-color .3s, transform .3s, box-shadow .3s;
+      border-radius: var(--r-card);
+      padding: 28px;
       position: relative;
       overflow: hidden;
+      transition: border-color .3s, transform .3s, box-shadow .3s;
     }
 
-    .feature-card::before {
+    .feat-card::after {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, var(--purple), transparent);
+      background: linear-gradient(90deg, transparent, rgba(155,47,212,.6), transparent);
       opacity: 0;
       transition: opacity .3s;
     }
 
-    .feature-card:hover {
-      border-color: rgba(218, 34, 255, .5);
-      transform: translateY(-6px);
-      box-shadow: 0 12px 30px rgba(218, 34, 255, 0.1);
+    .feat-card:hover {
+      border-color: var(--border2);
+      transform: translateY(-5px);
+      box-shadow: 0 16px 36px rgba(155,47,212,.12);
     }
 
-    .feature-card:hover::before {
-      opacity: 1;
-    }
+    .feat-card:hover::after { opacity: 1; }
 
-    .feature-icon {
-      width: 52px;
-      height: 52px;
+    .feat-icon {
+      width: 50px;
+      height: 50px;
       border-radius: 14px;
-      margin-bottom: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
-      background: linear-gradient(135deg, rgba(218, 34, 255, .2), rgba(151, 51, 238, .1));
-      box-shadow: 0 4px 15px rgba(218, 34, 255, 0.15);
+      font-size: 22px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, rgba(155,47,212,.18), rgba(110,31,163,.08));
+      border: 1px solid rgba(155,47,212,.2);
     }
 
-    .feature-card h3 {
-      font-size: 18px;
+    .feat-card h3 {
+      font-size: 17px;
       font-weight: 700;
       margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
-    .feature-card p {
+    .feat-card p {
       color: var(--muted);
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.72;
     }
 
-    .feature-badge {
+    .badge {
       display: inline-block;
-      background: linear-gradient(135deg, var(--purple), var(--purple2));
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 8px;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 7px;
       border-radius: 6px;
-      margin-left: 8px;
-      vertical-align: middle;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
+    .badge-new { background: linear-gradient(135deg, var(--plum), var(--plum2)); color: #fff; }
+    .badge-pro { background: rgba(240,90,42,.15); border: 1px solid rgba(240,90,42,.4); color: var(--coral); }
 
-    /* ── AI SECTION ── */
-    .ai-section {
-      background: linear-gradient(135deg, rgba(218, 34, 255, .08), rgba(151, 51, 238, .05));
-      border: 1px solid rgba(218, 34, 255, .2);
-      border-radius: 32px;
-      padding: 64px;
+    /* ─── AI SECTION ─── */
+    .ai-wrap {
+      background: rgba(20,24,32,0.5);
+      border: 1px solid rgba(155,47,212,.18);
+      border-radius: 28px;
+      padding: 60px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 64px;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 56px;
       align-items: center;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 24px 60px rgba(0,0,0,.35);
+      overflow: hidden;
+      width: 100%;
     }
 
-    .ai-chat {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+    /* Chat mockup */
+    .ai-chat { display: flex; flex-direction: column; gap: 14px; }
 
-    .chat-bubble {
-      padding: 14px 18px;
+    .bubble {
+      padding: 13px 17px;
       border-radius: 16px;
-      font-size: 14px;
+      font-size: 13.5px;
       line-height: 1.6;
-      max-width: 85%;
+      max-width: 88%;
     }
-
-    .chat-bubble.ai {
-      background: rgba(218, 34, 255, .15);
-      border: 1px solid rgba(218, 34, 255, .2);
+    .bubble.ai {
+      background: rgba(155,47,212,.14);
+      border: 1px solid rgba(155,47,212,.22);
       align-self: flex-start;
       border-bottom-left-radius: 4px;
-      position: relative;
     }
-
-    .chat-bubble.user {
+    .bubble.user {
       background: var(--bg3);
       border: 1px solid var(--border);
       align-self: flex-end;
       border-bottom-right-radius: 4px;
     }
-
-    .chat-bubble .sender {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--purple);
-      margin-bottom: 6px;
+    .bubble .sender {
+      font-size: 10px;
+      font-weight: 800;
+      color: #c26eff;
+      letter-spacing: 0.05em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
     }
 
-    /* ── PRICING ── */
+    /* Habit cards inside AI section */
+    .habit-cards { display: flex; flex-direction: column; gap: 11px; width: 100%; min-width: 0; }
+
+    .habit-card { width: 100%; min-width: 0;
+    
+      background: rgba(22,26,34,0.85);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .habit-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.25); }
+
+    .habit-left { display: flex; align-items: center; gap: 14px; }
+    .habit-emoji {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .habit-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+    .habit-meta { font-size: 11px; color: var(--muted); }
+
+    .habit-tag {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* Prompt bar */
+    .prompt-bar {
+      background: rgba(10,13,19,0.8);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 14px;
+      padding: 15px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.4);
+    }
+    .prompt-bar::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--plum), var(--coral));
+    }
+    .prompt-text {
+      font-size: 13px;
+      color: #ddd;
+      font-family: 'DM Mono', monospace;
+      white-space: nowrap;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      border-right: 2px solid var(--plum);
+      animation: typing 3.5s steps(40) infinite;
+    }
+    .prompt-btn {
+      background: linear-gradient(135deg, var(--plum), var(--plum2));
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 7px 13px;
+      border-radius: 8px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ─── TESTIMONIALS ─── */
+    .testimonials {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 56px;
+    }
+
+    .testi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+      padding: 28px;
+      backdrop-filter: blur(12px);
+      transition: border-color .3s, transform .3s;
+    }
+    .testi-card:hover { border-color: var(--border2); transform: translateY(-4px); }
+
+    .testi-stars {
+      color: var(--amber);
+      font-size: 14px;
+      letter-spacing: 2px;
+      margin-bottom: 14px;
+    }
+
+    .testi-text {
+      color: var(--soft);
+      font-size: 14.5px;
+      line-height: 1.72;
+      margin-bottom: 20px;
+      font-style: italic;
+    }
+
+    .testi-author {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .author-name { font-size: 14px; font-weight: 700; }
+    .author-role { font-size: 12px; color: var(--muted); }
+
+    /* ─── PRICING ─── */
     .pricing-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 24px;
-      margin-top: 64px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      margin-top: 56px;
     }
 
     .plan-card {
       background: var(--bg2);
       border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 36px;
+      border-radius: 24px;
+      padding: 34px;
       position: relative;
-      overflow: hidden;
+      transition: border-color .3s, transform .3s;
     }
+    .plan-card:hover { transform: translateY(-4px); }
 
     .plan-card.featured {
-      background: linear-gradient(135deg, rgba(218, 34, 255, .12), rgba(151, 51, 238, .08));
-      border-color: rgba(218, 34, 255, .4);
+      background: linear-gradient(150deg, rgba(155,47,212,.14), rgba(110,31,163,.08));
+      border-color: rgba(155,47,212,.4);
+      box-shadow: 0 0 0 1px rgba(155,47,212,.1), 0 20px 50px rgba(155,47,212,.12);
     }
 
-    .plan-badge {
+    .plan-pill {
       position: absolute;
-      top: 24px;
-      right: 24px;
-      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      top: 22px; right: 22px;
+      background: linear-gradient(135deg, var(--plum), var(--plum2));
       color: #fff;
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 10px;
+      font-weight: 800;
       padding: 4px 12px;
       border-radius: 100px;
+      letter-spacing: 0.5px;
     }
 
-    .plan-name {
-      font-size: 14px;
+    .plan-label {
+      font-size: 13px;
       font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       margin-bottom: 8px;
     }
 
     .plan-price {
-      font-size: 48px;
-      font-weight: 900;
+      font-family: 'Fraunces', serif;
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1;
       margin-bottom: 4px;
+      letter-spacing: -1px;
     }
-
-    .plan-price span {
-      font-size: 20px;
+    .plan-price sub {
+      font-size: 18px;
       font-weight: 600;
       color: var(--muted);
+      vertical-align: baseline;
+      letter-spacing: 0;
     }
 
     .plan-period {
       color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 32px;
+      font-size: 13px;
+      margin-bottom: 28px;
     }
 
     .plan-features {
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-bottom: 32px;
+      gap: 11px;
+      margin-bottom: 28px;
     }
-
     .plan-features li {
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 14px;
+      color: var(--soft);
     }
-
     .plan-features li::before {
       content: '✓';
-      color: var(--purple);
+      color: #c26eff;
       font-weight: 800;
+      flex-shrink: 0;
     }
 
     .plan-btn {
       display: block;
       text-align: center;
-      padding: 14px;
-      border-radius: 14px;
-      font-size: 15px;
+      padding: 13px;
+      border-radius: 12px;
+      font-size: 14px;
       font-weight: 700;
       text-decoration: none;
       transition: all .2s;
     }
-
-    .plan-btn.outlined {
+    .plan-btn.outline {
       border: 1px solid var(--border);
+      color: var(--soft);
+    }
+    .plan-btn.outline:hover { background: rgba(255,255,255,.05); color: #fff; }
+    .plan-btn.fill {
+      background: linear-gradient(135deg, var(--plum), var(--plum2));
       color: #fff;
+      box-shadow: 0 6px 22px rgba(155,47,212,.32);
     }
+    .plan-btn.fill:hover { box-shadow: 0 10px 30px rgba(155,47,212,.5); transform: translateY(-1px); }
 
-    .plan-btn.outlined:hover {
-      background: rgba(255, 255, 255, .05);
-    }
-
-    .plan-btn.filled {
-      background: linear-gradient(135deg, var(--purple), var(--purple2));
-      color: #fff;
-      box-shadow: 0 6px 24px rgba(218, 34, 255, .3);
-    }
-
-    .plan-btn.filled:hover {
-      box-shadow: 0 10px 32px rgba(218, 34, 255, .5);
-      transform: translateY(-1px);
-    }
-
-    /* ── DOWNLOAD ── */
-    .download-section {
-      background: linear-gradient(135deg, var(--purple), var(--orange));
-      border-radius: 32px;
-      padding: 80px 64px;
+    /* ─── DOWNLOAD CTA ─── */
+    .download-cta {
+      background: linear-gradient(135deg, var(--plum), var(--coral));
+      border-radius: 28px;
+      padding: 72px 56px;
       text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .download-cta::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.04;
+      pointer-events: none;
     }
 
-    .download-section h2 {
-      font-size: clamp(32px, 4vw, 52px);
-      font-weight: 900;
-      margin-bottom: 16px;
+    .download-cta h2 {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(28px, 4vw, 50px);
+      font-weight: 700;
+      margin-bottom: 14px;
+      letter-spacing: -0.5px;
+      position: relative;
     }
 
-    .download-section p {
-      font-size: 18px;
-      opacity: .85;
+    .download-cta p {
+      font-size: 17px;
+      opacity: .88;
       margin-bottom: 40px;
+      max-width: 440px;
+      margin-left: auto;
+      margin-right: auto;
+      position: relative;
+    }
+
+    .store-btns {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
     }
 
     .store-btn {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
-      background: rgba(0, 0, 0, .25);
-      border: 1px solid rgba(255, 255, 255, .2);
+      gap: 10px;
+      background: rgba(0,0,0,.28);
+      border: 1px solid rgba(255,255,255,.22);
       color: #fff;
-      padding: 14px 28px;
-      border-radius: 16px;
+      padding: 13px 26px;
+      border-radius: 14px;
       text-decoration: none;
-      font-weight: 600;
       font-size: 15px;
-      backdrop-filter: blur(10px);
+      font-weight: 600;
       transition: background .2s;
+      backdrop-filter: blur(10px);
     }
+    .store-btn:hover { background: rgba(0,0,0,.42); }
 
-    .store-btn:hover {
-      background: rgba(0, 0, 0, .4);
-    }
-
-    .store-btn svg {
-      width: 28px;
-      height: 28px;
-    }
-
-    /* ── FOOTER ── */
+    /* ─── FOOTER ─── */
     footer {
-      padding: 48px 60px;
+      padding: 44px 48px;
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: gap;
+      flex-wrap: wrap;
+      gap: 20px;
       color: var(--muted);
       font-size: 14px;
     }
 
-    footer a {
-      color: var(--muted);
-      text-decoration: none;
-      transition: color .2s;
+    footer a { color: var(--muted); text-decoration: none; transition: color .2s; }
+    footer a:hover { color: #fff; }
+
+    .footer-links { display: flex; gap: 24px; }
+
+    /* ─── AI MOBILE / DESKTOP VISIBILITY ─── */
+    .ai-mobile { display: none; }
+    .ai-desktop { display: grid; }
+
+    /* ─── PHONE MOCKUP ─── */
+    .ai-phone {
+      width: 100%;
+      max-width: 320px;
+      margin: 28px auto 0;
+      background: #0d1018;
+      border-radius: 36px;
+      border: 2px solid rgba(155,47,212,.35);
+      box-shadow: 0 0 0 6px rgba(155,47,212,.07), 0 24px 48px rgba(0,0,0,.5);
+      overflow: hidden;
+      position: relative;
     }
 
-    footer a:hover {
-      color: #fff;
+    .phone-notch {
+      width: 90px;
+      height: 22px;
+      background: #0d1018;
+      border-radius: 0 0 16px 16px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+      border-bottom: 1px solid rgba(255,255,255,.06);
     }
 
-    .footer-links {
+    .phone-screen {
+      padding: 14px 16px 24px;
+    }
+
+    .phone-prompt {
       display: flex;
-      gap: 28px;
+      align-items: center;
+      gap: 10px;
+      background: rgba(10,13,19,.9);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px;
+      padding: 11px 14px;
+      margin-bottom: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .phone-prompt::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--plum), var(--coral));
+    }
+    .phone-prompt-text {
+      font-size: 11.5px;
+      color: #ccc;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      border-right: 1.5px solid var(--plum);
+      animation: typing 3.5s steps(38) infinite;
+      flex: 1;
+      min-width: 0;
     }
 
-    /* ── ANIMATIONS ── */
-    @keyframes fadeUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
+    .phone-cards { display: flex; flex-direction: column; gap: 10px; }
 
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .phone-card {
+      background: rgba(22,26,34,.9);
+      border: 1px solid;
+      border-radius: 12px;
+      padding: 12px 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .phone-card-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .phone-emoji {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .phone-card-name {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .phone-card-meta {
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .phone-tag {
+      font-size: 8px;
+      font-weight: 800;
+      padding: 3px 7px;
+      border-radius: 6px;
+      border: 1px solid;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    /* ─── ANIMATIONS ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes typing {
+      0%   { width: 0 }
+      60%  { width: 100% }
+      80%  { width: 100% }
+      100% { width: 0 }
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(18px) scale(.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     .reveal {
       opacity: 0;
-      transform: translateY(40px);
+      transform: translateY(36px);
       transition: opacity .7s ease, transform .7s ease;
     }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
 
-    .reveal.visible {
-      opacity: 1;
-      transform: translateY(0);
+    /* ─── RESPONSIVE / MOBILE ─── */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .testimonials { grid-template-columns: repeat(2, 1fr); }
+      .pricing-grid { grid-template-columns: 1fr; }
+      .ai-wrap { grid-template-columns: 1fr; padding: 36px 28px; gap: 36px; }
     }
 
-    /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
-      nav {
-        padding: 16px 24px;
-      }
+    @media (max-width: 640px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+      .nav-cta { display: none; } /* show in mobile menu instead */
 
-      .nav-links {
-        display: none;
-      }
+      .ai-wrap { overflow: hidden; padding: 24px 18px; }
+      .prompt-bar { padding: 11px 13px; gap: 8px; width: 100%; box-sizing: border-box; }
+      .prompt-text { font-size: 11px; }
+      .prompt-btn { font-size: 10px; padding: 5px 9px; }
+      .habit-card { width: 100%; min-width: 0; padding: 11px 13px; box-sizing: border-box; }
+      .habit-left { gap: 10px; min-width: 0; flex: 1; }
+      .habit-emoji { width: 34px; height: 34px; font-size: 16px; flex-shrink: 0; }
+      .habit-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .habit-tag { font-size: 8px; padding: 3px 6px; white-space: nowrap; flex-shrink: 0; }
 
-      .ai-section {
-        grid-template-columns: 1fr;
-        padding: 32px;
-        gap: 32px;
-      }
+      .hero { padding: 100px 20px 60px; }
+      .hero h1 { letter-spacing: -1px; }
+      .hero-sub { font-size: 16px; }
 
-      .download-section {
-        padding: 48px 24px;
-      }
+      .hero-btns { flex-direction: column; align-items: stretch; }
+      .btn-primary, .btn-ghost { justify-content: center; }
 
-      footer {
-        flex-direction: column;
-        gap: 20px;
-        text-align: center;
-      }
+      .social-proof { gap: 20px; }
+      .proof-divider { display: none; }
 
-      .hero-stats {
-        gap: 24px;
-      }
+      section { padding: 72px 20px; }
+
+      .features-grid { grid-template-columns: 1fr; gap: 14px; }
+
+      .testimonials { grid-template-columns: 1fr; }
+
+      .ai-wrap { padding: 28px 20px; gap: 28px; }
+      .prompt-text { font-size: 12px; }
+
+      .pricing-grid { grid-template-columns: 1fr; }
+      .plan-card.featured { order: -1; }
+
+      #ai { overflow: hidden; }
+      .ai-desktop { display: none !important; }
+      .ai-mobile { display: block; }
+      .download-cta { padding: 52px 24px; border-radius: 20px; }
+      .store-btns { flex-direction: column; align-items: center; }
+      .store-btn { width: 100%; max-width: 280px; justify-content: center; }
+
+      footer { flex-direction: column; text-align: center; padding: 36px 20px; gap: 14px; }
+      .footer-links { flex-wrap: wrap; justify-content: center; gap: 16px; }
+    }
+
+    @media (max-width: 400px) {
+      .hero h1 { font-size: 34px; }
     }
   </style>
 </head>
-
 <body>
 
-  <!-- NAV -->
-  <nav>
-    <div class="nav-logo">⚡ Flow</div>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#ai">AI Generator</a>
-      <a href="#pricing">Pricing</a>
+<!-- ─── NAV ─── -->
+<nav>
+  <div class="nav-logo">⚡ Flow</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#ai">AI Magic</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <a href="#download" class="nav-cta">Download Free →</a>
+  <div class="hamburger" id="hamburger" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="mobile-menu" id="mobileMenu">
+  <div class="mobile-close" id="mobileClose">✕</div>
+  <a href="#features" class="mobile-link">Features</a>
+  <a href="#ai" class="mobile-link">AI Magic</a>
+  <a href="#pricing" class="mobile-link">Pricing</a>
+  <a href="#download" class="mobile-link" style="color:#c26eff">Download Free →</a>
+</div>
+
+<!-- ─── HERO ─── -->
+<section class="hero">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <div class="hero-eyebrow">✨ Version 1.2 — AI Routine Generator is here</div>
+
+  <h1>The habit coach that<br><em>actually gets you</em></h1>
+
+  <p class="hero-sub">No guilt trips. No overwhelm. Flow meets you where you are — then helps you quietly become the person you want to be, one small win at a time.</p>
+
+  <div class="hero-btns">
+    <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="btn-primary">
+      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M3.18 23.76a2 2 0 0 0 2.16-.18L17.5 12 5.34.42A2 2 0 0 0 2 2.18v19.64a2 2 0 0 0 1.18 1.94z"/></svg>
+      Google Play
+    </a>
+    <a href="https://apps.apple.com/app/flow-ai-habit-tracker/id6400000000" class="btn-primary" style="background:rgba(255,255,255,.06);border:1px solid var(--border);box-shadow:none;">
+      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.7-1.13 1.84-.99 2.94.1.8 1.16 2.05.82 1.67-.1.08 1.34-.12 2-1"/></svg>
+      App Store
+    </a>
+    <a href="#features" class="btn-ghost">See how it works ↓</a>
+  </div>
+
+  <div class="social-proof">
+    <div class="proof-item">
+      <span class="proof-num">10k+</span>
+      <span class="proof-label">Active users</span>
     </div>
-    <a href="#download" class="nav-cta">Download Free →</a>
-  </nav>
+    <div class="proof-divider"></div>
+    <div class="proof-item">
+      <span class="proof-num">4.8★</span>
+      <span class="proof-label">App rating</span>
+    </div>
+    <div class="proof-divider"></div>
+    <div class="proof-item">
+      <span class="proof-num">100+</span>
+      <span class="proof-label">Expert templates</span>
+    </div>
+    <div class="proof-divider"></div>
+    <div class="proof-item">
+      <span class="proof-num">∞</span>
+      <span class="proof-label">Possible streaks</span>
+    </div>
+  </div>
+</section>
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="glow-ball g1"></div>
-    <div class="glow-ball g2"></div>
-    <div class="glow-ball g3"></div>
-
-    <div class="hero-badge">🚀 Version 1.2.0: AI Routine Generator & Templates</div>
-    <h1>Build habits that<br><span>actually stick</span></h1>
-    <p>Flow combines a powerful AI Routine Generator, a massive library of expert habit templates, and beautiful
-      tracking — all in one beautifully designed app backed by AI.</p>
-
-    <div class="hero-btns">
-      <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="btn-primary">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-          <path
-            d="M3.18 23.76a2 2 0 0 0 2.16-.18L17.5 12 5.34.42A2 2 0 0 0 2 2.18v19.64a2 2 0 0 0 1.18 1.94zM17.5 12l3.32 3.34-2.27 1.31L17.5 12zm0 0 1.05-4.65-2.27-1.31L17.5 12z" />
-        </svg>
-        Google Play
-      </a>
-      <a href="https://apps.apple.com/app/flow-ai-habit-tracker/id6400000000" class="btn-primary"
-        style="background: rgba(255,255,255,0.06); border: 1px solid var(--border); box-shadow: none; font-weight: 600;">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-          <path
-            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.7-1.13 1.84-.99 2.94.1.8 1.16 2.05.82 1.67-.1.08 1.34-.12 2-1" />
-        </svg>
-        App Store
-      </a>
-      <a href="#features" class="btn-secondary">See Features ↓</a>
+<!-- ─── FEATURES ─── -->
+<section id="features">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-tag">Why Flow</div>
+      <h2 class="section-title">Built for real life,<br>not perfect days</h2>
+      <p class="section-body">Most habit apps make you feel bad when you slip. Flow is different — it adapts to you, picks you back up, and keeps things moving forward.</p>
     </div>
 
-    <div class="hero-stats">
-
-      <div class="stat">
-        <div class="stat-num">AI</div>
-        <div class="stat-label">Powered Coach</div>
+    <div class="features-grid">
+      <div class="feat-card reveal">
+        <div class="feat-icon">🚀</div>
+        <h3>AI Routine Generator <span class="badge badge-new">New</span></h3>
+        <p>Tell the AI your goal, and it builds a complete, flexible habit schedule in seconds — personalized for your lifestyle, not a generic template.</p>
       </div>
-      <div class="stat">
-        <div class="stat-num">∞</div>
-        <div class="stat-label">Streaks Possible</div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">📚</div>
+        <h3>100+ Habit Templates <span class="badge badge-new">New</span></h3>
+        <p>Explore expert-curated routines for fitness, mental health, focus, sleep, and more. Start with a tap — tweak as you go.</p>
       </div>
-      <div class="stat">
-        <div class="stat-num">100+</div>
-        <div class="stat-label">Expert Templates</div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">⏱️</div>
+        <h3>Focus Tracking <span class="badge badge-new">New</span></h3>
+        <p>See exactly how many minutes a day you're investing in yourself. Small numbers compound into big identity shifts.</p>
       </div>
-      <div class="stat">
-        <div class="stat-num">4.8★</div>
-        <div class="stat-label">App Rating</div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">🤖</div>
+        <h3>AI Habit Coach <span class="badge badge-pro">Pro</span></h3>
+        <p>Your coach reads your patterns and gives you real, weekly insights — not generic tips, but advice that knows <em>you</em>.</p>
       </div>
-      <div class="stat">
-        <div class="stat-num">10k+</div>
-        <div class="stat-label">Active Users</div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">🔥</div>
+        <h3>Streak Tracking</h3>
+        <p>Watch your streaks grow. There's something almost magical about a number you don't want to break — we lean into that.</p>
       </div>
-    </div>
-  </section>
-
-  <!-- FEATURES -->
-  <section id="features">
-    <div class="container">
-      <div class="reveal">
-        <div class="section-label">Why Flow</div>
-        <h2 class="section-title">Everything you need to<br>master your routine</h2>
-        <p class="section-sub">Designed for people who are serious about growth but want it to feel effortless.</p>
+      <div class="feat-card reveal">
+        <div class="feat-icon">📊</div>
+        <h3>Advanced Analytics <span class="badge badge-pro">Pro</span></h3>
+        <p>Weekly and monthly charts reveal your best days, completion rates, and where you tend to stall — so you can fix it.</p>
       </div>
-      <div class="features-grid">
-        <!-- NEW v1.2.0 FEATURES -->
-        <div class="feature-card reveal">
-          <div class="feature-icon">🚀</div>
-          <h3>AI Routine Generator <span class="feature-badge">NEW</span></h3>
-          <p>Tell the AI your goal, and it will build a complete, flexible habit schedule for you in seconds.
-            Personalized for your lifestyle.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">📚</div>
-          <h3>Habit Templates <span class="feature-badge">NEW</span></h3>
-          <p>Explore our library of 100+ expert-curated templates. From fitness to mental health, start your journey
-            with a single tap.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">⏱️</div>
-          <h3>Focus Tracking <span class="feature-badge">NEW</span></h3>
-          <p>Monitor exactly how many minutes you spend each day building your discipline with our new in-app time
-            counter.</p>
-        </div>
-
-        <!-- CORE FEATURES -->
-        <div class="feature-card reveal">
-          <div class="feature-icon">🤖</div>
-          <h3>AI Habit Coach <span class="feature-badge">PRO</span></h3>
-          <p>Get personalized weekly insights powered by Llama AI. Your coach analyzes your patterns and gives you real,
-            actionable advice.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">🔥</div>
-          <h3>Streak Tracking</h3>
-          <p>Watch your streaks grow day by day. Nothing is more motivating than a streak you don't want to break.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">📊</div>
-          <h3>Advanced Analytics <span class="feature-badge">PRO</span></h3>
-          <p>Weekly and monthly charts show your completion rate, best days, and progress trends at a glance.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">👥</div>
-          <h3>Social & Friends</h3>
-          <p>Add friends, see their streaks, and stay accountable together. Progress is more fun when it's shared.</p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">🏆</div>
-          <h3>Achievements</h3>
-          <p>Unlock badges as you hit milestones. From your first week to a 100-day streak — every win is celebrated.
-          </p>
-        </div>
-        <div class="feature-card reveal">
-          <div class="feature-icon">🔔</div>
-          <h3>Interactive Notifications <span class="feature-badge">NEW</span></h3>
-          <p>AI-generated reminders keep you on track. Complete habits instantly with interactive actions ("Mark as
-            Done") directly from your lock screen without opening the app.</p>
-        </div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">👥</div>
+        <h3>Friends & Accountability</h3>
+        <p>Add friends, peek at their streaks, cheer each other on. Progress is measurably better when it's shared.</p>
+      </div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">🏆</div>
+        <h3>Achievements</h3>
+        <p>Unlock badges as you hit milestones. Every win — even the small ones — deserves a moment of recognition.</p>
+      </div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">🔔</div>
+        <h3>Smart Notifications <span class="badge badge-new">New</span></h3>
+        <p>AI-generated reminders that know when to nudge you. Mark habits done right from your lock screen — no app-opening required.</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- AI SECTION -->
-  <section id="ai" style="position: relative;">
-    <div class="container">
-      <div class="ai-section reveal"
-        style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 48px; align-items: center; background: rgba(22, 26, 34, 0.4); backdrop-filter: blur(20px); border: 1px solid rgba(218, 34, 255, 0.15); box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
-        <div>
-          <div class="section-label">AI Generator</div>
-          <h2 class="section-title" style="font-size:clamp(30px, 3.5vw, 44px); line-height: 1.15;">Your perfect
-            routine,<br>built in seconds</h2>
-          <p style="color:var(--muted);font-size:16px;line-height:1.8;margin-top:16px">Flow's AI Routine Generator
-            powered by Llama 3.3 creates structured, healthy habits tailored exactly to your lifestyle. Tell the AI your
-            goals, daily challenges, or job, and watch it craft the ultimate schedule optimized for success.</p>
-          <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="btn-primary"
-            style="margin-top:32px;display:inline-flex">Try AI Generator →</a>
+<!-- ─── AI SECTION ─── -->
+<section id="ai">
+  <div class="container">
+
+    <!-- DESKTOP layout (hidden on mobile) -->
+    <div class="ai-wrap reveal ai-desktop">
+      <div>
+        <div class="section-tag">AI Generator</div>
+        <h2 class="section-title" style="font-size:clamp(28px,3.5vw,44px);">Your perfect routine,<br>ready in seconds</h2>
+        <p style="color:var(--soft);font-size:16px;line-height:1.78;margin-top:16px;">Just tell Flow who you are and what you're after. The AI does the heavy lifting — weaving together habits that actually fit your schedule, energy, and goals.</p>
+        <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="btn-primary" style="margin-top:32px;display:inline-flex;">Try the AI Generator →</a>
+      </div>
+      <div>
+        <div class="prompt-bar">
+          <span style="font-size:18px;filter:drop-shadow(0 0 8px var(--plum));">🔮</span>
+          <div class="prompt-text">Generate routine for a software developer...</div>
+          <div class="prompt-btn">Generate</div>
         </div>
-
-        <!-- High-fidelity AI Simulator -->
-        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%; position: relative;">
-          <!-- Prompt Box -->
-          <div
-            style="background: rgba(12, 16, 23, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); position: relative; overflow: hidden;">
-            <div
-              style="position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--purple), var(--orange));">
+        <div class="habit-cards">
+          <div class="habit-card" style="border:1px solid rgba(0,230,118,.18);animation:cardIn .5s .2s both;">
+            <div class="habit-left">
+              <div class="habit-emoji" style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);">🏃</div>
+              <div><div class="habit-name">Desk Stretch</div><div class="habit-meta">10 mins · every 2 hours</div></div>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-              <span style="font-size: 18px; filter: drop-shadow(0 0 8px var(--purple));">🔮</span>
-              <div
-                style="font-size: 13px; color: #fff; font-family: monospace; white-space: nowrap; overflow: hidden; border-right: 2px solid var(--purple); animation: typing 3.5s steps(40, end) infinite;">
-                Generate routine for a software developer...
-              </div>
-            </div>
-            <div
-              style="background: linear-gradient(135deg, var(--purple), var(--purple2)); font-size: 11px; font-weight: 700; color: #fff; padding: 6px 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(218,34,255,0.3);">
-              Generate
-            </div>
+            <div class="habit-tag" style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:#00E676;">HEALTH</div>
           </div>
-
-          <!-- Generated Routine Output Container -->
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- Card 1 -->
-            <div class="showcase-card"
-              style="background: rgba(22, 26, 34, 0.85); border: 1px solid rgba(0, 230, 118, 0.2); border-radius: 16px; padding: 18px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: cardFadeIn 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; transition: all 0.3s;">
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div
-                  style="width: 42px; height: 42px; background: rgba(0, 230, 118, 0.12); border: 1px solid rgba(0, 230, 118, 0.3); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 15px rgba(0, 230, 118, 0.1);">
-                  🏃</div>
-                <div>
-                  <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px;">Desk Stretch</h4>
-                  <p style="font-size: 12px; color: var(--muted);">10 mins • Every 2 hours</p>
-                </div>
-              </div>
-              <div
-                style="background: rgba(0, 230, 118, 0.1); border: 1px solid rgba(0, 230, 118, 0.3); color: #00E676; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; letter-spacing: 0.5px;">
-                HEALTH</div>
+          <div class="habit-card" style="border:1px solid rgba(34,180,255,.18);animation:cardIn .5s .4s both;">
+            <div class="habit-left">
+              <div class="habit-emoji" style="background:rgba(34,180,255,.1);border:1px solid rgba(34,180,255,.25);">💧</div>
+              <div><div class="habit-name">Stay Hydrated</div><div class="habit-meta">2000 ml daily goal</div></div>
             </div>
-
-            <!-- Card 2 -->
-            <div class="showcase-card"
-              style="background: rgba(22, 26, 34, 0.85); border: 1px solid rgba(34, 180, 255, 0.2); border-radius: 16px; padding: 18px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: cardFadeIn 0.5s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; transition: all 0.3s;">
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div
-                  style="width: 42px; height: 42px; background: rgba(34, 180, 255, 0.12); border: 1px solid rgba(34, 180, 255, 0.3); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 15px rgba(34, 180, 255, 0.1);">
-                  💧</div>
-                <div>
-                  <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px;">Stay Hydrated</h4>
-                  <p style="font-size: 12px; color: var(--muted);">2000 ml daily limit</p>
-                </div>
-              </div>
-              <div
-                style="background: rgba(34, 180, 255, 0.1); border: 1px solid rgba(34, 180, 255, 0.3); color: #22B4FF; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; letter-spacing: 0.5px;">
-                VITALITY</div>
+            <div class="habit-tag" style="background:rgba(34,180,255,.1);border:1px solid rgba(34,180,255,.25);color:#22B4FF;">VITALITY</div>
+          </div>
+          <div class="habit-card" style="border:1px solid rgba(155,47,212,.18);animation:cardIn .5s .6s both;">
+            <div class="habit-left">
+              <div class="habit-emoji" style="background:rgba(155,47,212,.1);border:1px solid rgba(155,47,212,.25);">📚</div>
+              <div><div class="habit-name">Read Tech Book</div><div class="habit-meta">20 mins daily</div></div>
             </div>
-
-            <!-- Card 3 -->
-            <div class="showcase-card"
-              style="background: rgba(22, 26, 34, 0.85); border: 1px solid rgba(218, 34, 255, 0.2); border-radius: 16px; padding: 18px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: cardFadeIn 0.5s 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; transition: all 0.3s;">
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div
-                  style="width: 42px; height: 42px; background: rgba(218, 34, 255, 0.12); border: 1px solid rgba(218, 34, 255, 0.3); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 15px rgba(218, 34, 255, 0.1);">
-                  📚</div>
-                <div>
-                  <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px;">Read Tech Book</h4>
-                  <p style="font-size: 12px; color: var(--muted);">20 mins daily</p>
-                </div>
-              </div>
-              <div
-                style="background: rgba(218, 34, 255, 0.1); border: 1px solid rgba(218, 34, 255, 0.3); color: #DA22FF; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; letter-spacing: 0.5px;">
-                MIND</div>
-            </div>
+            <div class="habit-tag" style="background:rgba(155,47,212,.1);border:1px solid rgba(155,47,212,.25);color:#c26eff;">MIND</div>
           </div>
         </div>
       </div>
     </div>
 
-    <style>
-      @keyframes typing {
-        from {
-          width: 0
-        }
-
-        to {
-          width: 100%
-        }
-      }
-
-      @keyframes cardFadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px) scale(0.98);
-        }
-
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-      }
-
-      .showcase-card:hover {
-        transform: translateY(-3px) scale(1.01);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-        background: rgba(26, 30, 40, 0.95) !important;
-      }
-    </style>
-  </section>
-
-  <!-- PRICING -->
-  <section id="pricing">
-    <div class="container">
-      <div class="reveal" style="text-align:center;margin-bottom:0">
-        <div class="section-label">Pricing</div>
-        <h2 class="section-title">Start free, upgrade when ready</h2>
-        <p class="section-sub" style="margin:0 auto">All core features are completely free. Upgrade to Pro for AI
-          insights and unlimited analytics.</p>
+    <!-- MOBILE layout (hidden on desktop) -->
+    <div class="ai-mobile reveal">
+      <div class="ai-mobile-header">
+        <div class="section-tag">AI Generator</div>
+        <h2 class="section-title" style="font-size:28px;line-height:1.15;">Your perfect routine,<br>ready in seconds</h2>
+        <p style="color:var(--soft);font-size:15px;line-height:1.75;margin-top:12px;">Just describe your lifestyle — the AI builds a schedule that actually fits you.</p>
       </div>
-      <div class="pricing-grid">
-        <div class="plan-card reveal">
-          <div class="plan-name">Free</div>
-          <div class="plan-price">$0</div>
-          <div class="plan-period">Forever free</div>
-          <ul class="plan-features">
-            <li>Up to 10 habits</li>
-            <li>2 AI generations</li>
-            <li>Streak tracking</li>
-            <li>Basic stats</li>
-            <li>Friends & social</li>
-            <li>Achievements</li>
-          </ul>
-          <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn outlined">Download
-            Free</a>
-        </div>
-        <div class="plan-card featured reveal">
-          <div class="plan-badge">MOST POPULAR</div>
-          <div class="plan-name">Pro Yearly</div>
-          <div class="plan-price">$19<span>.99/yr</span></div>
-          <div class="plan-period">Less than $1.67 / month</div>
-          <ul class="plan-features">
-            <li>Unlimited habits</li>
-            <li>5 daily AI generations</li>
-            <li>AI Habit Coach</li>
-            <li>Advanced analytics</li>
-            <li>AI Interactive push notifications</li>
-            <li>Priority support</li>
-            <li>All future features</li>
-          </ul>
-          <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn filled">Get Pro →</a>
-        </div>
-        <div class="plan-card reveal">
-          <div class="plan-name">Pro Monthly</div>
-          <div class="plan-price">$1<span>.99/mo</span></div>
-          <div class="plan-period">Cancel anytime</div>
-          <ul class="plan-features">
-            <li>Unlimited habits</li>
-            <li>5 daily AI generations</li>
-            <li>AI Habit Coach</li>
-            <li>Advanced analytics</li>
-            <li>AI Interactive push notifications</li>
-            <li>Priority support</li>
-          </ul>
-          <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn outlined">Start
-            Monthly</a>
+
+      <!-- Phone mockup -->
+      <div class="ai-phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <!-- Prompt inside phone -->
+          <div class="phone-prompt">
+            <span>🔮</span>
+            <div class="phone-prompt-text">Generate routine for a developer...</div>
+          </div>
+          <!-- Cards inside phone -->
+          <div class="phone-cards">
+            <div class="phone-card" style="border-color:rgba(0,230,118,.3);animation:cardIn .5s .2s both;">
+              <div class="phone-card-left">
+                <div class="phone-emoji" style="background:rgba(0,230,118,.12);">🏃</div>
+                <div>
+                  <div class="phone-card-name">Desk Stretch</div>
+                  <div class="phone-card-meta">10 mins · every 2 hours</div>
+                </div>
+              </div>
+              <div class="phone-tag" style="color:#00E676;border-color:rgba(0,230,118,.3);background:rgba(0,230,118,.08);">HEALTH</div>
+            </div>
+            <div class="phone-card" style="border-color:rgba(34,180,255,.3);animation:cardIn .5s .4s both;">
+              <div class="phone-card-left">
+                <div class="phone-emoji" style="background:rgba(34,180,255,.12);">💧</div>
+                <div>
+                  <div class="phone-card-name">Stay Hydrated</div>
+                  <div class="phone-card-meta">2000 ml daily goal</div>
+                </div>
+              </div>
+              <div class="phone-tag" style="color:#22B4FF;border-color:rgba(34,180,255,.3);background:rgba(34,180,255,.08);">VITALITY</div>
+            </div>
+            <div class="phone-card" style="border-color:rgba(155,47,212,.3);animation:cardIn .5s .6s both;">
+              <div class="phone-card-left">
+                <div class="phone-emoji" style="background:rgba(155,47,212,.12);">📚</div>
+                <div>
+                  <div class="phone-card-name">Read Tech Book</div>
+                  <div class="phone-card-meta">20 mins daily</div>
+                </div>
+              </div>
+              <div class="phone-tag" style="color:#c26eff;border-color:rgba(155,47,212,.3);background:rgba(155,47,212,.08);">MIND</div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="btn-primary" style="width:100%;justify-content:center;margin-top:28px;">Try the AI Generator →</a>
     </div>
-  </section>
 
-  <!-- DOWNLOAD -->
-  <section id="download">
-    <div class="container">
-      <div class="download-section reveal">
-        <h2>Ready to build better habits?</h2>
-        <p>Join thousands of people transforming their daily routines with Flow.</p>
-        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-          <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="store-btn">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-              <path d="M3.18 23.76a2 2 0 0 0 2.16-.18L17.5 12 5.34.42A2 2 0 0 0 2 2.18v19.64a2 2 0 0 0 1.18 1.94z" />
-            </svg>
-            Google Play
-          </a>
-          <a href="https://apps.apple.com/app/flow-ai-habit-tracker/id6400000000" class="store-btn">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-              <path
-                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.7-1.13 1.84-.99 2.94.1.8 1.16 2.05.82 1.67-.1.08 1.34-.12 2-1" />
-            </svg>
-            App Store
-          </a>
+  </div>
+</section>
+
+<!-- ─── TESTIMONIALS ─── -->
+<section>
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:0;">
+      <div class="section-tag">Real stories</div>
+      <h2 class="section-title">What people are saying</h2>
+    </div>
+
+    <div class="testimonials">
+      <div class="testi-card reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"I've tried every habit app out there. Flow is the first one that didn't make me feel like a failure after missing a day. It just… picks up where you left off."</p>
+        <div class="testi-author">
+          <div class="avatar" style="background:rgba(155,47,212,.15);border:1px solid rgba(155,47,212,.3);">🧑</div>
+          <div>
+            <div class="author-name">Alex M.</div>
+            <div class="author-role">Product designer, Berlin</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testi-card reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"The AI routine generator is genuinely impressive. I typed 'I'm a nurse who works night shifts' and it came back with something I could actually use."</p>
+        <div class="testi-author">
+          <div class="avatar" style="background:rgba(0,180,120,.15);border:1px solid rgba(0,180,120,.3);">👩</div>
+          <div>
+            <div class="author-name">Maria R.</div>
+            <div class="author-role">ICU nurse, São Paulo</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testi-card reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Competing on streaks with my roommate turned our apartment into a weirdly wholesome gym. 60-day streak and counting."</p>
+        <div class="testi-author">
+          <div class="avatar" style="background:rgba(240,90,42,.15);border:1px solid rgba(240,90,42,.3);">🧑‍💻</div>
+          <div>
+            <div class="author-name">Jordan K.</div>
+            <div class="author-role">CS student, Toronto</div>
+          </div>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- FOOTER -->
-  <footer>
-    <div class="nav-logo">⚡ Flow</div>
-    <div class="footer-links">
-      <a href="/privacy.html">Privacy Policy</a>
-      <a href="/delete-account.html">Delete Account</a>
-      <a href="mailto:support@flowtracks.app">Contact</a>
+<!-- ─── PRICING ─── -->
+<section id="pricing">
+  <div class="container">
+    <div class="reveal" style="text-align:center;">
+      <div class="section-tag">Pricing</div>
+      <h2 class="section-title">Start free, grow at your pace</h2>
+      <p class="section-body" style="margin:0 auto;">All the core habit-building tools are completely free. Unlock AI insights when you're ready to go deeper.</p>
     </div>
-    <div>© 2026 Flow. All rights reserved.</div>
-  </footer>
 
-  <script>
-    // Scroll reveal
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    <div class="pricing-grid">
+      <div class="plan-card reveal">
+        <div class="plan-label">Free</div>
+        <div class="plan-price">$0</div>
+        <div class="plan-period">Forever free, always</div>
+        <ul class="plan-features">
+          <li>Up to 10 habits</li>
+          <li>Streak tracking</li>
+          <li>Basic stats</li>
+          <li>Friends &amp; social</li>
+          <li>Achievements</li>
+        </ul>
+        <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn outline">Download Free</a>
+      </div>
 
-    // Animated counter
-    document.querySelectorAll('.stat-num').forEach(el => {
-      const text = el.textContent;
-      const num = parseInt(text.replace(/[^0-9]/g, ''));
-      if (!isNaN(num)) {
-        let start = 0;
-        const end = num;
-        const timer = setInterval(() => {
-          start += Math.ceil(end / 30);
-          if (start >= end) {
-            el.textContent = text;
-            clearInterval(timer);
-          } else {
-            el.textContent = start + (text.includes('+') ? '+' : '');
-          }
-        }, 50);
-      }
-    });
-  </script>
+      <div class="plan-card featured reveal">
+        <div class="plan-pill">BEST VALUE</div>
+        <div class="plan-label">Pro Yearly</div>
+        <div class="plan-price">$19<sub>/yr</sub></div>
+        <div class="plan-period">That's less than a coffee per month</div>
+        <ul class="plan-features">
+          <li>Unlimited habits</li>
+          <li>AI Habit Coach</li>
+          <li>Advanced analytics</li>
+          <li>AI-powered notifications</li>
+          <li>Priority support</li>
+          <li>All future features</li>
+        </ul>
+        <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn fill">Get Pro →</a>
+      </div>
+
+      <div class="plan-card reveal">
+        <div class="plan-label">Pro Monthly</div>
+        <div class="plan-price">$1<sub>.99/mo</sub></div>
+        <div class="plan-period">Cancel whenever you like</div>
+        <ul class="plan-features">
+          <li>Unlimited habits</li>
+          <li>AI Habit Coach</li>
+          <li>Advanced analytics</li>
+          <li>AI-powered notifications</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="plan-btn outline">Start Monthly</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── DOWNLOAD ─── -->
+<section id="download">
+  <div class="container">
+    <div class="download-cta reveal">
+      <h2>Ready to show up for yourself?</h2>
+      <p>Thousands of people are quietly building better lives with Flow. Your streak starts today.</p>
+      <div class="store-btns">
+        <a href="https://play.google.com/store/apps/details?id=com.codex.flow" class="store-btn">
+          <svg width="22" height="22" fill="white" viewBox="0 0 24 24"><path d="M3.18 23.76a2 2 0 0 0 2.16-.18L17.5 12 5.34.42A2 2 0 0 0 2 2.18v19.64a2 2 0 0 0 1.18 1.94z"/></svg>
+          Google Play
+        </a>
+        <a href="https://apps.apple.com/app/flow-ai-habit-tracker/id6400000000" class="store-btn">
+          <svg width="22" height="22" fill="white" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.7-1.13 1.84-.99 2.94.1.8 1.16 2.05.82 1.67-.1.08 1.34-.12 2-1"/></svg>
+          App Store
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ─── -->
+<footer>
+  <div class="nav-logo">⚡ Flow</div>
+  <div class="footer-links">
+    <a href="/privacy.html">Privacy Policy</a>
+    <a href="/delete-account.html">Delete Account</a>
+    <a href="mailto:support@flowtracks.app">Contact</a>
+  </div>
+  <div>© 2026 Flow. All rights reserved.</div>
+</footer>
+
+<script>
+  // Scroll reveal
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+  // Animated counters
+  document.querySelectorAll('.proof-num').forEach(el => {
+    const orig = el.textContent.trim();
+    const num = parseInt(orig.replace(/[^0-9]/g, ''));
+    if (isNaN(num)) return;
+    let count = 0;
+    const step = Math.ceil(num / 28);
+    const timer = setInterval(() => {
+      count = Math.min(count + step, num);
+      el.textContent = count + (orig.includes('+') ? '+' : orig.includes('k') ? 'k+' : '');
+      if (count >= num) { el.textContent = orig; clearInterval(timer); }
+    }, 50);
+  });
+
+  // Mobile menu
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+  const mobileClose = document.getElementById('mobileClose');
+
+  hamburger.addEventListener('click', () => mobileMenu.classList.add('open'));
+  mobileClose.addEventListener('click', () => mobileMenu.classList.remove('open'));
+  document.querySelectorAll('.mobile-link').forEach(link => {
+    link.addEventListener('click', () => mobileMenu.classList.remove('open'));
+  });
+</script>
 </body>
-
 </html>
