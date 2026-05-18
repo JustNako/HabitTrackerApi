@@ -53,7 +53,8 @@ public class SyncService
                 UpdatedAt = h.UpdatedAt,
                 IsDeleted = h.IsDeleted,
                 IsPublic = h.IsPublic,
-                Unit = h.Unit
+                Unit = h.Unit,
+                TimeOfDay = h.TimeOfDay
             }).ToList(),
             HabitLogs = logs.Select(l => new SyncHabitLogDto
             {
@@ -96,6 +97,7 @@ public class SyncService
                     existingHabit.IsDeleted = syncHabit.IsDeleted;
                     existingHabit.IsPublic = syncHabit.IsPublic;
                     existingHabit.Unit = syncHabit.Unit;
+                    existingHabit.TimeOfDay = syncHabit.TimeOfDay;
                     _context.Entry(existingHabit).State = EntityState.Modified;
                 }
             }
@@ -118,7 +120,8 @@ public class SyncService
                     UpdatedAt = syncHabit.UpdatedAt,
                     IsDeleted = syncHabit.IsDeleted,
                     IsPublic = syncHabit.IsPublic,
-                    Unit = syncHabit.Unit
+                    Unit = syncHabit.Unit,
+                    TimeOfDay = syncHabit.TimeOfDay
                 };
                 _context.Habits.Add(newHabit);
             }

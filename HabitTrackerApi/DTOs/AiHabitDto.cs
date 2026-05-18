@@ -17,4 +17,5 @@ public class AiHabitDto
     
     public int TargetDays { get; set; } = 1;
     public string? Unit { get; set; }
+    public string? TimeOfDay { get; set; }
 }

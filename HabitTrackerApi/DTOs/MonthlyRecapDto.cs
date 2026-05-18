@@ -26,4 +26,7 @@ public class HabitSummaryDto
     public string Title { get; set; } = string.Empty;
     public int CompletionRate { get; set; }
     public int BestStreak { get; set; }
+    public string? TimeOfDay { get; set; }
+    public int TargetDays { get; set; }
+    public string? Unit { get; set; }
 }

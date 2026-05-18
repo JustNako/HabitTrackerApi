@@ -31,6 +31,7 @@ public class SyncHabitDto
     public DateTime CreatedAt { get; set; }
     public int TargetDays { get; set; }
     public string? Unit { get; set; }
+    public string? TimeOfDay { get; set; }
     public HabitRepeatType RepeatType { get; set; }
     public string? RepeatDaysOfWeek { get; set; }
     public string? RepeatDaysOfMonth { get; set; }

@@ -209,6 +209,9 @@ namespace HabitTrackerApi.Migrations
                     b.Property<int>("TargetDays")
                         .HasColumnType("int");
 
+                    b.Property<string>("TimeOfDay")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

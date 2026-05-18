@@ -11,6 +11,7 @@ public class HabitDto
     public string? Notes { get; set; }
     public int TargetDays {get;set;}
     public string? Unit { get; set; }
+    public string? TimeOfDay { get; set; }
     public int CompletedDays {get;set;}
     public HabitRepeatType RepeatType { get; set; }
     public List<DayOfWeek>? RepeatDaysOfWeek { get; set; }

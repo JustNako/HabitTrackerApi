@@ -12,6 +12,7 @@ public class CreateHabitDto
     public string? Notes { get; set; }
     public int TargetDays { get; set; }
     public string? Unit { get; set; }
+    public string? TimeOfDay { get; set; }
     public HabitRepeatType RepeatType { get; set; } = HabitRepeatType.EveryDay;
     public List<DayOfWeek>? RepeatDaysOfWeek { get; set; }
     public List<int>? RepeatDaysOfMonth { get; set; }

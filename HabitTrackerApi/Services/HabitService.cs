@@ -48,7 +48,8 @@ public class HabitService
             RepeatPeriod = h.RepeatPeriod,
             IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == DateTime.UtcNow.Date),
             IsPublic = h.IsPublic,
-            Unit = h.Unit
+            Unit = h.Unit,
+            TimeOfDay = h.TimeOfDay
         }).ToList();
 
         return Result.Success(dtos);
@@ -87,7 +88,8 @@ public class HabitService
             RepeatPeriod = dto.RepeatPeriod,
             IsPublic = dto.IsPublic,
             UserId = userId,
-            Unit = dto.Unit
+            Unit = dto.Unit,
+            TimeOfDay = dto.TimeOfDay
         };
 
         await _repo.Add(habit);
@@ -383,6 +385,8 @@ public class HabitService
         });
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime GeneratedAt, List<string> Insights)> _insightsCache = new();
+
     public async Task<Result<List<string>>> GetAiInsights(string userId)
     {
         var user = await SyncProStatusAndGetUser(userId);
@@ -391,6 +395,13 @@ public class HabitService
         if (!isCurrentlyPro)
         {
             return Result.Failure<List<string>>(new Error("ProRequired", "AI Insights are available to Pro users only."));
+        }
+
+        // Anti-spam & performance cache: return cached weekly insights if generated less than 1 hour ago
+        var now = DateTime.UtcNow;
+        if (_insightsCache.TryGetValue(userId, out var cached) && now - cached.GeneratedAt < TimeSpan.FromHours(1))
+        {
+            return Result.Success(cached.Insights);
         }
 
         var startDate = DateTime.UtcNow.Date.AddDays(-7);
@@ -439,13 +450,21 @@ public class HabitService
                 HabitRepeatType.EveryDay => "daily",
                 _ => "custom schedule"
             };
+            var timeInfo = string.IsNullOrEmpty(habit.TimeOfDay) ? "no scheduled time" : $"scheduled at {habit.TimeOfDay}";
+            var goalInfo = habit.TargetDays > 1 && !string.IsNullOrEmpty(habit.Unit) 
+                ? $", Daily Goal: {habit.TargetDays} {habit.Unit}" 
+                : habit.TargetDays > 1 ? $", Daily Goal: {habit.TargetDays}" : "";
 
-            promptBuilder.AppendLine($"- Habit: \"{habit.Title}\" ({repeatInfo})");
+            promptBuilder.AppendLine($"- Habit: \"{habit.Title}\" ({repeatInfo}, {timeInfo}{goalInfo})");
             promptBuilder.AppendLine($"  7-day pattern: {patternString} ({completedDays}/7 days)");
             if (ageInDays < 14) promptBuilder.AppendLine("  Note: This is a NEW habit, fragile phase.");
         }
 
         var insights = await _aiService.GenerateInsightsAsync(promptBuilder.ToString());
+        
+        // Cache the generated insights for this user
+        _insightsCache[userId] = (DateTime.UtcNow, insights);
+
         return Result.Success(insights);
     }
 
@@ -736,7 +755,10 @@ public class HabitService
             {
                 Title = habit.Title,
                 CompletionRate = rate,
-                BestStreak = bestStreak
+                BestStreak = bestStreak,
+                TimeOfDay = habit.TimeOfDay,
+                TargetDays = habit.TargetDays,
+                Unit = habit.Unit
             });
         }
 
@@ -772,7 +794,9 @@ public class HabitService
         // AI Insight
         var aiPrompt = $"Monthly Progress: {recap.TotalCompletionRate}% overall completion. " +
                        $"Total completions: {recap.CompletedDaysCount}. " +
-                       $"Top streaks: {string.Join(", ", recap.HabitSummaries.Select(s => $"{s.Title}: {s.BestStreak} days"))}.";
+                       $"Habit stats (with scheduled times and goals): " +
+                       string.Join(", ", recap.HabitSummaries.Select(s => 
+                           $"\"{s.Title}\" ({s.CompletionRate}% completion, best streak: {s.BestStreak} days{(string.IsNullOrEmpty(s.TimeOfDay) ? "" : $", scheduled at {s.TimeOfDay}")}{(s.TargetDays > 1 && !string.IsNullOrEmpty(s.Unit) ? $", Daily Goal: {s.TargetDays} {s.Unit}" : s.TargetDays > 1 ? $", Daily Goal: {s.TargetDays}" : "")})"));
 
         recap.AiInsight = await _aiService.GenerateMonthlyRecapInsightAsync(aiPrompt);
 

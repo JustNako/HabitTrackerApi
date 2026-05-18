@@ -28,9 +28,9 @@ public class HabitReminderService
         _logger = logger;
     }
     
-    public async Task SendRemindersAsync(int hour, CancellationToken ct = default)
+    public async Task SendRemindersAsync(CancellationToken ct = default)
     {
-        _logger.LogInformation("Sending habit reminders (slot {Hour}:00 UTC)…", hour);
+        _logger.LogInformation("Processing hourly habit reminders check...");
 
         try
         {
@@ -39,42 +39,70 @@ public class HabitReminderService
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
 
-            // Only users who have reminders enabled
-            // 1. Get users whose local time matches the slot hour and have reminders enabled
+            // 1. Get all active users with reminders enabled
             var allUsersWithReminders = await userManager.Users
                 .Where(u => u.ReminderEnabled && u.FcmToken != null)
                 .ToListAsync(ct);
 
-            // Filter in-memory to handle timezone logic correctly (EF Core has trouble adding minutes to UtcNow in DB)
+            // 2. Filter users whose LOCAL hour is currently 7 (morning) or 18 (evening)
             var usersToRemind = allUsersWithReminders
-                .Where(u => {
-                    var userLocalTime = DateTime.UtcNow.AddMinutes(u.TimeZoneOffset);
-                    return userLocalTime.Hour == hour;
+                .Select(u => {
+                    var localTime = DateTime.UtcNow.AddMinutes(u.TimeZoneOffset);
+                    return new { User = u, LocalTime = localTime };
+                })
+                .Where(x => {
+                    int hour = x.LocalTime.Hour;
+                    // Morning (7 AM) or Evening (6 PM) unless they only want 1 reminder per day
+                    return hour == 7 || (hour == 18 && x.User.ReminderFrequency != 1);
                 })
                 .ToList();
 
             if (usersToRemind.Count == 0) return;
 
-            var today = DateTime.UtcNow.Date;
-            var userIds = usersToRemind.Select(u => u.Id).ToList();
-
-            // 2. Batch fetch ALL incomplete habits for these users in ONE query
-            var incompleteHabitsMap = await db.Habits
-                .Where(h => userIds.Contains(h.UserId) && !h.IsDeleted)
-                .Where(h => !h.Logs.Any(l => l.Date == today && l.IsCompleted))
-                .GroupBy(h => h.UserId)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(h => new { h.Id, h.Title }).ToList(), ct);
-
             var sent = 0;
 
-            foreach (var user in usersToRemind)
+            foreach (var item in usersToRemind)
             {
-                // Skip the evening slot for users who only want 1 reminder per day
-                // Slot 18 is hardcoded as evening in our system
-                if (user.ReminderFrequency == 1 && hour == 18) continue;
+                var user = item.User;
+                var localTime = item.LocalTime;
+                var utcToday = DateTime.UtcNow.Date;
+                int dayOfWeekDart = localTime.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)localTime.DayOfWeek;
+                int dayOfMonth = localTime.Day;
 
-                if (!incompleteHabitsMap.TryGetValue(user.Id, out var incompleteHabits) || incompleteHabits.Count == 0) 
-                    continue; // All habits done
+                // Fetch habits and their completion status for today (using UTC today as stored in db)
+                var activeHabits = await db.Habits
+                    .Where(h => h.UserId == user.Id && !h.IsDeleted)
+                    .Select(h => new { 
+                        h.Id, 
+                        h.Title, 
+                        h.RepeatType, 
+                        h.RepeatDaysOfWeek, 
+                        h.RepeatDaysOfMonth,
+                        IsCompletedToday = h.Logs.Any(l => l.Date == utcToday && l.IsCompleted)
+                    })
+                    .ToListAsync(ct);
+
+                // Filter by schedule in-memory
+                var incompleteHabits = activeHabits.Where(h => 
+                {
+                    if (h.IsCompletedToday) return false;
+                    
+                    if (h.RepeatType == HabitRepeatType.EveryDay) return true;
+                    if (h.RepeatType == HabitRepeatType.SpecificDaysOfWeek && !string.IsNullOrEmpty(h.RepeatDaysOfWeek))
+                    {
+                        var days = h.RepeatDaysOfWeek.Split(',').Select(s => int.TryParse(s, out int d) ? d : 0);
+                        return days.Contains(dayOfWeekDart);
+                    }
+                    if (h.RepeatType == HabitRepeatType.SpecificDaysOfMonth && !string.IsNullOrEmpty(h.RepeatDaysOfMonth))
+                    {
+                        var days = h.RepeatDaysOfMonth.Split(',').Select(s => int.TryParse(s, out int d) ? d : 0);
+                        return days.Contains(dayOfMonth);
+                    }
+                    return false;
+                }).ToList();
+
+                if (incompleteHabits.Count == 0) 
+                    continue; // All scheduled habits completed for today
 
                 var habitTitles = incompleteHabits.Select(h => h.Title).ToList();
 
@@ -115,7 +143,7 @@ public class HabitReminderService
                 sent++;
             }
 
-            _logger.LogInformation("Sent {Count} reminder(s) for slot {Hour}:00 based on local timezones.", sent, hour);
+            _logger.LogInformation("Sent {Count} reminder(s) based on local timezones.", sent);
         }
         catch (Exception ex)
         {

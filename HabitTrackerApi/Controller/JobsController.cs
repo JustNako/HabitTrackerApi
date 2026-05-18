@@ -28,15 +28,8 @@ public class JobsController : ControllerBase
             return Unauthorized(new { message = "Invalid API Key." });
         }
 
-        // 2. Determine which slot to run (morning or evening)
-        // Cron jobs will hit this at exactly 07:00 UTC and 18:00 UTC.
-        int currentHour = DateTime.UtcNow.Hour;
-        
-        // Allow a small window (e.g., if cron hits at 07:01)
-        int targetHour = currentHour < 12 ? 7 : 18;
+        await _reminderService.SendRemindersAsync();
 
-        await _reminderService.SendRemindersAsync(targetHour);
-
-        return Ok(new { message = $"Reminders triggered successfully for slot {targetHour}:00 UTC." });
+        return Ok(new { message = "Hourly reminders check processed successfully." });
     }
 }
