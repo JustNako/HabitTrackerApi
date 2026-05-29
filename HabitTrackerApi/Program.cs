@@ -22,6 +22,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Controllers
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
+builder.Services.AddCors();
 
 // Rate Limiting
 builder.Services.AddRateLimiter(options =>
@@ -188,6 +189,11 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 // Pipeline
+app.UseCors(policy => 
+    policy.AllowAnyOrigin()
+          .AllowAnyMethod()
+          .AllowAnyHeader()
+);
 app.UseExceptionHandler();
 app.UseDefaultFiles(); // serves index.html at root "/"
 app.UseStaticFiles();  // serve CSS/HTML before rate limiter

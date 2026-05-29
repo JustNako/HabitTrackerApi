@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using HabitTrackerApi.Entities;
+using HabitTrackerApi.Models;
 
 namespace HabitTrackerApi.Data;
 
@@ -11,6 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Friendship> Friendships {get;set;}
     public DbSet<UserAchievement> UserAchievements {get;set;}
     public DbSet<AppUsage> AppUsages {get;set;}
+    public DbSet<SharedRecap> SharedRecaps {get;set;}
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
