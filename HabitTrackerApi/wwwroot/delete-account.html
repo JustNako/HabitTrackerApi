@@ -1,69 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Deletion - Flow Habit Tracker</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        .container {
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 { color: #DA22FF; }
-        h2 { margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .alert {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delete Account - Flow</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237C3AED'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #FEFEFE; color: #1A1D23;
+      line-height: 1.7; padding: 60px 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 720px; margin: 0 auto;
+      background: #fff; border: 1px solid #E5E7EB;
+      border-radius: 16px; padding: 48px;
+    }
+    h1 {
+      font-family: 'Fraunces', serif;
+      font-size: 32px; font-weight: 700;
+      margin-bottom: 16px; color: #1A1D23;
+    }
+    .warning {
+      background: #FEF2F2; border: 1px solid #FECACA;
+      border-radius: 10px; padding: 18px;
+      margin-bottom: 28px; color: #991B1B; font-size: 14px;
+    }
+    h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 20px; font-weight: 600;
+      margin-top: 28px; margin-bottom: 12px; color: #1A1D23;
+      border-bottom: 1px solid #E5E7EB; padding-bottom: 6px;
+    }
+    p { color: #6B7280; margin-bottom: 16px; font-size: 15px; }
+    ol, ul { margin-bottom: 18px; padding-left: 20px; }
+    li { color: #6B7280; margin-bottom: 6px; font-size: 15px; }
+    a { color: #7C3AED; text-decoration: none; }
+    a:hover { color: #1A1D23; }
+    .footer-link {
+      margin-top: 40px; padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+      text-align: center; font-size: 13px; color: #6B7280;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Account and Data Deletion</h1>
-        <p>At Flow Habit Tracker, we respect your privacy and your right to control your personal data.</p>
-        
-        <div class="alert">
-            <strong>Note:</strong> Deleting your account is permanent and cannot be undone. All your habits, statistics, and personal information will be completely erased from our servers.
-        </div>
+<div class="container">
+  <h1>Delete your account</h1>
+  <p>If you want to leave Flow, you can delete all your data permanently. We don't keep hidden copies.</p>
 
-        <h2>Option 1: Delete via the App (Recommended)</h2>
-        <p>The fastest and most secure way to delete your account is directly inside the Flow app:</p>
-        <ol>
-            <li>Open the <strong>Flow Habit Tracker</strong> app on your device.</li>
-            <li>Tap on your <strong>Profile/Settings</strong> icon.</li>
-            <li>Select <strong>Account Settings</strong>.</li>
-            <li>Scroll down and tap <strong>Delete Account</strong>.</li>
-            <li>Confirm your password to authorize the deletion.</li>
-        </ol>
+  <div class="warning">
+    <strong>This is permanent.</strong> Once you delete your account, all habits, streaks, logs, and personal data are gone. We cannot restore them.
+  </div>
 
-        <h2>Option 2: Delete via Email Request</h2>
-        <p>If you no longer have access to the app, you can request manual account deletion by contacting our support team.</p>
-        <p>Please send an email to: <strong>codexsstudio@gmail.com</strong></p>
-        <p>In your email, include:</p>
-        <ul>
-            <li>The email address associated with your Flow account.</li>
-            <li>Your Flow username.</li>
-            <li>A clear statement that you wish to have your account and all associated data permanently deleted.</li>
-        </ul>
-        <p><em>* For security reasons, we may ask you to verify your identity before processing an email deletion request. Manual requests may take up to 7 business days to process.</em></p>
-        
-        <p style="margin-top: 40px; font-size: 0.9em; color: #666;">
-            <a href="/privacy.html">Return to Privacy Policy</a>
-        </p>
-    </div>
+  <h2>Option 1: Delete from the app (fastest)</h2>
+  <ol>
+    <li>Open Flow on your device.</li>
+    <li>Go to Profile Settings.</li>
+    <li>Tap Account Settings.</li>
+    <li>Scroll down and tap Delete Account.</li>
+    <li>Enter your password to confirm.</li>
+  </ol>
+
+  <h2>Option 2: Email us</h2>
+  <p>If you can't access the app anymore, email <a href="mailto:codexsstudio@gmail.com">codexsstudio@gmail.com</a> with:</p>
+  <ul>
+    <li>The email on your Flow account.</li>
+    <li>Your username.</li>
+    <li>A note saying you want your account deleted.</li>
+  </ul>
+  <p><em>We'll verify your identity before processing it. Manual requests take up to 7 business days.</em></p>
+
+  <div class="footer-link">
+    <a href="/privacy.html">Privacy Policy</a> &nbsp;&bull;&nbsp; <a href="/">Back to Flow</a>
+  </div>
+</div>
 </body>
 </html>

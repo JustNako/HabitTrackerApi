@@ -189,9 +189,9 @@ using (var scope = app.Services.CreateScope())
 }
 // Pipeline
 app.UseExceptionHandler();
-app.UseRateLimiter(); // Apply rate limiting before static files and routing
 app.UseDefaultFiles(); // serves index.html at root "/"
-app.UseStaticFiles();
+app.UseStaticFiles();  // serve CSS/HTML before rate limiter
+app.UseRateLimiter();  // rate-limit only API calls
 
 if (app.Environment.IsDevelopment())
 {

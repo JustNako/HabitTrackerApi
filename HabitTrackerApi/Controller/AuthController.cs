@@ -553,7 +553,36 @@ namespace HabitTrackerApi.Controllers
 
             if (user == null) return Unauthorized();
 
+            // First, remove this token from any OTHER users (prevent notifications for previous accounts)
+            var otherUsersWithToken = await _userManager.Users
+                .Where(u => u.FcmToken == dto.Token && u.Id != userId)
+                .ToListAsync();
+
+            foreach (var otherUser in otherUsersWithToken)
+            {
+                otherUser.FcmToken = null;
+                await _userManager.UpdateAsync(otherUser);
+            }
+
             user.FcmToken = dto.Token;
+            await _userManager.UpdateAsync(user);
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// Removes the device FCM token on logout.
+        /// </summary>
+        [Authorize]
+        [HttpDelete("fcm-token")]
+        public async Task<IActionResult> RemoveFcmToken()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null) return Unauthorized();
+
+            user.FcmToken = null;
             await _userManager.UpdateAsync(user);
 
             return Ok();
