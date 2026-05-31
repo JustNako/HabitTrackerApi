@@ -118,7 +118,7 @@ public class AchievementEvaluatorService
             // Notify user
             if (!string.IsNullOrEmpty(user.FcmToken))
             {
-                var title = newAchievements.Count == 1 ? "🏆 Achievement Unlocked!" : "🏆 Multiple Achievements Unlocked!";
+                var title = newAchievements.Count == 1 ? "Achievement Unlocked!" : "Multiple Achievements Unlocked!";
                 var body = newAchievements.Count == 1 
                     ? $"You just unlocked: {GetAchievementTitle(newAchievements.First())}" 
                     : $"You just unlocked {newAchievements.Count} new achievements!";

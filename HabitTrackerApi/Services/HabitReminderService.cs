@@ -106,7 +106,7 @@ public class HabitReminderService
 
                 var habitTitles = incompleteHabits.Select(h => h.Title).ToList();
 
-                string title = "⚡ Keep your streak alive!";
+                string title = "Keep your streak alive!";
                 string body = "You still have habits to complete today. Open Flow and knock them out!";
 
                 // 🔥 Premium Feature: AI-Generated Personalized Push Notifications

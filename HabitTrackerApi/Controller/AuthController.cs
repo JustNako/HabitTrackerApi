@@ -627,7 +627,7 @@ namespace HabitTrackerApi.Controllers
 
             await _notificationService.SendAsync(
                 user.FcmToken, 
-                "🚀 Test Notification", 
+                "Test Notification", 
                 "Everything is working! This is how your habit reminders will look.",
                 new Dictionary<string, string> { { "type", "test" } }
             );
@@ -660,7 +660,7 @@ namespace HabitTrackerApi.Controllers
 
             var habitTitles = incompleteHabits.Select(h => h.Title).ToList();
 
-            string title = "⚡ AI Coach Message";
+            string title = "AI Coach Message";
             string prompt = $"Uncompleted habits: {string.Join(", ", habitTitles)}";
             string body = await aiService.GenerateNotificationMessageAsync(prompt);
 

@@ -101,7 +101,7 @@ public class AiService
                 new
                 {
                     role = "system",
-                    content = "You are a supportive, clever, and encouraging AI habit teammate. The user has some uncompleted habits. Write a SHORT, frictionless push notification (max 100 chars) to gently remind them that you're in this together.\nCRITICAL RULES:\n1. NO GUILT-TRIPPING: Never use shame or sass. Focus on the positive feeling of finishing.\n2. ACTIONABLE: Suggest 'The 2-Minute Rule' if it feels like a lot.\n3. Tone: Like a friendly 'nudge' from a teammate. Use 1-2 emojis.\n4. DO NOT use quotation marks or mention specific habit names unless it fits perfectly."
+                    content = "You are a supportive, clever, and encouraging AI habit teammate. The user has some uncompleted habits. Write a SHORT, frictionless push notification (max 100 chars) to gently remind them that you're in this together.\nCRITICAL RULES:\n1. NO GUILT-TRIPPING: Never use shame or sass. Focus on the positive feeling of finishing.\n2. ACTIONABLE: Suggest 'The 2-Minute Rule' if it feels like a lot.\n3. Tone: Like a friendly 'nudge' from a teammate. Do NOT use any emojis.\n4. DO NOT use quotation marks or mention specific habit names unless it fits perfectly."
                 },
                 new
                 {
@@ -296,5 +296,5 @@ Example for flexible schedule:
         "Track one more habit this week to grow further."
     };
 
-    private static string DefaultNotification() => "You still have habits to complete today. Open Flow and knock them out! ⚡";
+    private static string DefaultNotification() => "You still have habits to complete today. Open Flow and knock them out!";
 }

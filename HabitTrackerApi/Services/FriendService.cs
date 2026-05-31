@@ -66,7 +66,7 @@ public class FriendService
         {
             await _notifications.SendAsync(
                 addressee.FcmToken,
-                title: "New Friend Request 👋",
+                title: "New Friend Request",
                 body: $"{requester.UserName} wants to be your friend on Streakz!",
                 data: new Dictionary<string, string> { ["type"] = "friend_request" }
             );
@@ -94,7 +94,7 @@ public class FriendService
         {
             await _notifications.SendAsync(
                 requester.FcmToken,
-                title: "Friend Request Accepted! 🎉",
+                title: "Friend Request Accepted!",
                 body: $"{accepter.UserName} accepted your friend request. You can now see each other's habits!",
                 data: new Dictionary<string, string> { ["type"] = "request_accepted" }
             );

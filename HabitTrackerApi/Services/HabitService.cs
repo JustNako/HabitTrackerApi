@@ -203,7 +203,12 @@ public class HabitService
             .ToListAsync();
 
         int streak = 0;
-        var expected = DateTime.UtcNow.Date;
+        var today = DateTime.UtcNow.Date;
+
+        // Allow streak to start from yesterday if today hasn't been completed yet.
+        // This prevents showing 0 streak on an active ongoing streak before the user marks today.
+        var todayCompleted = logsDates.Contains(today);
+        var expected = todayCompleted ? today : today.AddDays(-1);
 
         foreach (var logDate in logsDates)
         {
@@ -214,10 +219,10 @@ public class HabitService
             }
             else if (logDate < expected)
             {
-                // Пропуск в серии — стрик прерван
+                // Gap in the chain — streak broken
                 break;
             }
-            // logDate > expected — дубликат за тот же день, пропускаем
+            // logDate > expected — duplicate for the same day, skip
         }
 
         return Result.Success(streak);
