@@ -12,6 +12,7 @@ using HabitTrackerApi.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.RateLimiting;
+using Google.Apis.Auth;
 
 namespace HabitTrackerApi.Controllers
 {
@@ -113,6 +114,88 @@ namespace HabitTrackerApi.Controllers
             return Ok(new { token });
         }
 
+        [HttpPost("google")]
+        [EnableRateLimiting("AuthLimit")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
+        {
+            if (string.IsNullOrEmpty(request.IdToken))
+            {
+                return BadRequest(new { message = "Google ID token is required." });
+            }
+
+            try
+            {
+                var settings = new GoogleJsonWebSignature.ValidationSettings();
+                var clientIds = _config.GetSection("GoogleAuth:ClientIds").Get<string[]>();
+                if (clientIds != null && clientIds.Length > 0)
+                {
+                    settings.Audience = clientIds;
+                }
+
+                var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+                if (payload == null)
+                {
+                    return Unauthorized(new { message = "Invalid Google token payload." });
+                }
+
+                var email = payload.Email;
+                if (string.IsNullOrEmpty(email))
+                {
+                    return BadRequest(new { message = "Email not provided in Google token." });
+                }
+
+                var user = await _userManager.FindByEmailAsync(email);
+                bool isNewUser = false;
+
+                if (user == null)
+                {
+                    isNewUser = true;
+                    var username = await GenerateUniqueUsernameAsync(email);
+                    user = new ApplicationUser
+                    {
+                        UserName = username,
+                        Email = email,
+                        EmailConfirmed = true, // Google verified the email address
+                        InviteCode = GenerateInviteCode(username)
+                    };
+
+                    var result = await _userManager.CreateAsync(user);
+                    if (!result.Succeeded)
+                    {
+                        return BadRequest(new { message = "User creation failed.", errors = result.Errors });
+                    }
+                }
+                else
+                {
+                    // If existing user, mark email as confirmed since Google verified it
+                    if (!user.EmailConfirmed)
+                    {
+                        user.EmailConfirmed = true;
+                        await _userManager.UpdateAsync(user);
+                    }
+                }
+
+                if (request.TimeZoneOffset.HasValue)
+                {
+                    user.TimeZoneOffset = request.TimeZoneOffset.Value;
+                    await _userManager.UpdateAsync(user);
+                }
+
+                var token = GenerateToken(user);
+                return Ok(new { token, isNewUser });
+            }
+            catch (InvalidJwtException ex)
+            {
+                Console.WriteLine($"[Google Auth Error] Invalid token: {ex.Message}");
+                return Unauthorized(new { message = "Invalid Google token signature or expired." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Google Auth Error] {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during Google authentication." });
+            }
+        }
+
         [HttpGet("confirm-email")]
         public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
         {
@@ -127,7 +210,7 @@ namespace HabitTrackerApi.Controllers
                 return Content(await GetHtmlPageAsync("❌ Confirmation Failed", "This link has already been used or has expired. Please request a new one."), "text/html");
 
             var safeUserName = System.Net.WebUtility.HtmlEncode(user.UserName);
-            return Content(await GetHtmlPageAsync("✅ Email Confirmed!", $"Hi {safeUserName}! Your email has been confirmed. You can now log in to Flow."), "text/html");
+            return Content(await GetHtmlPageAsync("Email Confirmed!", $"Hi {safeUserName}! Your email has been confirmed. You can now log in to Flow."), "text/html");
         }
 
         [HttpPost("resend-confirmation")]
@@ -220,11 +303,61 @@ namespace HabitTrackerApi.Controllers
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Reset Password - Flow</title>
                   <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0A0A; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                    .card { background: #16161A; padding: 40px; border-radius: 16px; border: 1px solid #2C2C35; width: 100%; max-width: 400px; box-sizing: border-box; }
-                    h2 { text-align: center; margin-top: 0; }
-                    input { width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid #2C2C35; background: #0A0A0A; color: white; box-sizing: border-box; }
-                    button { width: 100%; padding: 14px; background: linear-gradient(135deg, #DA22FF, #9733EE); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+                    body { 
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                      background: #121212; 
+                      color: #E8EBE9; 
+                      display: flex; 
+                      justify-content: center; 
+                      align-items: center; 
+                      height: 100vh; 
+                      margin: 0; 
+                    }
+                    .card { 
+                      background: #1A1A1A; 
+                      padding: 48px; 
+                      border-radius: 24px; 
+                      border: 1px solid #2A2A2A; 
+                      width: 100%; 
+                      max-width: 400px; 
+                      box-sizing: border-box; 
+                    }
+                    h2 { 
+                      font-weight: 400; 
+                      text-align: center; 
+                      margin-bottom: 32px; 
+                      color: #F5F5F5;
+                    }
+                    label { 
+                      display: block; 
+                      margin-bottom: 8px; 
+                      font-size: 14px; 
+                      color: #9CA3AF; 
+                    }
+                    input { 
+                      width: 100%; 
+                      padding: 16px; 
+                      margin-bottom: 24px; 
+                      border-radius: 16px; 
+                      border: 1px solid #2A2A2A; 
+                      background: #121212; 
+                      color: #E8EBE9; 
+                      box-sizing: border-box; 
+                      font-size: 16px;
+                    }
+                    button { 
+                      width: 100%; 
+                      padding: 16px; 
+                      background: #B4A9C8; /* Lavender accent */
+                      color: #151515; 
+                      border: none; 
+                      border-radius: 40px; 
+                      font-size: 16px; 
+                      font-weight: 500; 
+                      cursor: pointer; 
+                      transition: opacity 0.2s;
+                    }
+                    button:hover { opacity: 0.9; }
                   </style>
                 </head>
                 <body>
@@ -234,8 +367,8 @@ namespace HabitTrackerApi.Controllers
                       <input type="hidden" name="email" value="{{email}}">
                       <input type="hidden" name="token" value="{{token}}">
                       <label>New Password</label>
-                      <input type="password" name="newPassword" required minlength="6">
-                      <button type="submit">Reset Password</button>
+                      <input type="password" name="newPassword" required minlength="6" placeholder="••••••••">
+                      <button type="submit">Update Password</button>
                     </form>
                   </div>
                 </body>
@@ -285,7 +418,7 @@ namespace HabitTrackerApi.Controllers
             }
 
             var html = await System.IO.File.ReadAllTextAsync(templatePath);
-            var icon = title.StartsWith("✅") ? "🎉" : "⚠️";
+            var icon = title.StartsWith("❌") ? "⚠️" : "✅";
             
             return html
                 .Replace("{{title}}", System.Net.WebUtility.HtmlEncode(title))
@@ -305,6 +438,11 @@ namespace HabitTrackerApi.Controllers
             bool emailChanged = false;
             if (!string.IsNullOrEmpty(dto.Email) && dto.Email != user.Email)
             {
+                if (!await _userManager.HasPasswordAsync(user))
+                {
+                    return BadRequest(new { message = "Email cannot be changed for external accounts." });
+                }
+
                 var existingEmail = await _userManager.FindByEmailAsync(dto.Email);
                 if (existingEmail != null)
                     return BadRequest(new { message = "Email already in use." });
@@ -408,16 +546,58 @@ namespace HabitTrackerApi.Controllers
                 UserName = user.UserName!,
                 Email = user.Email!,
                 JoinedAt = user.JoinedAt,
-                IsPro = isCurrentlyPro
+                IsPro = isCurrentlyPro,
+                HasPassword = await _userManager.HasPasswordAsync(user)
             });
         }
         
         [HttpDelete("delete")]
-        public async Task<IActionResult> DeleteAccount([FromBody] LoginRequest request)
+        public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountRequest request)
         {
             var user = await _userManager.FindByNameAsync(request.Username);
-            if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
+            if (user == null)
                 return Unauthorized(new { message = "Invalid credentials" });
+
+            bool isVerified = false;
+
+            if (await _userManager.HasPasswordAsync(user))
+            {
+                if (!string.IsNullOrEmpty(request.Password) && await _userManager.CheckPasswordAsync(user, request.Password))
+                {
+                    isVerified = true;
+                }
+            }
+            else
+            {
+                // Google user (no password) - verify Google ID Token
+                if (!string.IsNullOrEmpty(request.IdToken))
+                {
+                    try
+                    {
+                        var settings = new GoogleJsonWebSignature.ValidationSettings();
+                        var clientIds = _config.GetSection("GoogleAuth:ClientIds").Get<string[]>();
+                        if (clientIds != null && clientIds.Length > 0)
+                        {
+                            settings.Audience = clientIds;
+                        }
+
+                        var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+                        if (payload != null && payload.Email == user.Email)
+                        {
+                            isVerified = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Delete Account Error] Google token verification failed: {ex.Message}");
+                    }
+                }
+            }
+
+            if (!isVerified)
+            {
+                return Unauthorized(new { message = "Authentication failed. Incorrect credentials." });
+            }
 
             // Сначала удаляем все связанные данные (Friendships, Habits, Achievements),
             // чтобы избежать ошибки Foreign Key constraint (500 Server Error)
@@ -531,6 +711,30 @@ namespace HabitTrackerApi.Controllers
         }
 
         // ── helpers ──────────────────────────────────────────────────────────
+
+        private async Task<string> GenerateUniqueUsernameAsync(string email)
+        {
+            var baseUsername = email.Split('@')[0];
+            
+            // Clean up to only contain alphanumeric, underscore, dot, hyphen
+            baseUsername = new string(baseUsername.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '-').ToArray());
+            
+            if (string.IsNullOrEmpty(baseUsername))
+            {
+                baseUsername = "user";
+            }
+
+            var username = baseUsername;
+            var suffix = 1;
+            
+            while (await _userManager.FindByNameAsync(username) != null)
+            {
+                username = $"{baseUsername}{suffix}";
+                suffix++;
+            }
+            
+            return username;
+        }
 
         private static string GenerateInviteCode(string username)
         {
@@ -720,6 +924,7 @@ namespace HabitTrackerApi.Controllers
         }
         
         [Authorize]
+        [EnableRateLimiting("AiLimit")]
         [HttpPost("generate-routine")]
         public async Task<IActionResult> GenerateRoutine([FromBody] GenerateRoutineRequest request, [FromServices] AiService aiService)
         {
@@ -793,6 +998,8 @@ namespace HabitTrackerApi.Controllers
 
     // ── request DTO ──────────────────────────────────────────────────────────
 
+    public record GoogleLoginRequest(string IdToken, int? TimeZoneOffset);
+    public record DeleteAccountRequest(string Username, string? Password, string? IdToken);
     public record UpgradeRequest(string Plan);
     public record LoginRequest(string Username, string Password, int? TimeZoneOffset);
     public record FcmTokenDto(string Token);

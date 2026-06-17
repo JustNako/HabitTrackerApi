@@ -3,6 +3,7 @@ using HabitTrackerApi.DTOs;
 using HabitTrackerApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace HabitTrackerApi.Controllers;
@@ -131,6 +132,7 @@ public class HabitsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("AiLimit")]
     [HttpGet("ai-insights")]
     public async Task<IActionResult> GetAiInsights()
     {
@@ -139,6 +141,28 @@ public class HabitsController : ControllerBase
             return Unauthorized();
 
         var result = await _service.GetAiInsights(userId);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == "ProRequired")
+                return StatusCode(403, new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [Authorize]
+    [EnableRateLimiting("AiLimit")]
+    [HttpGet("behavioral-analysis")]
+    public async Task<IActionResult> GetBehavioralAnalysis()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var result = await _service.GetBehavioralAnalysis(userId);
 
         if (result.IsFailure)
         {
@@ -189,6 +213,26 @@ public class HabitsController : ControllerBase
         return Ok(result.Value);
     }
 
+
+    [HttpPatch("{id}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateHabitDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var result = await _service.UpdateHabitSettings(id, userId, dto);
+
+        if (result.IsFailure)
+        {
+            if (result.Error == Error.NotFound)
+                return NotFound(new { error = result.Error });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok();
+    }
 
     [HttpPatch("{id}/notes")]
     public async Task<IActionResult> UpdateNotes(Guid id, [FromBody] UpdateHabitNotesDto dto)

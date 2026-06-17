@@ -46,13 +46,14 @@ public class AchievementEvaluatorService
         // Habit Completion & Streaks
         bool hasCompletedLog = false;
         int maxStreak = 0;
+        int userOffset = user.TimeZoneOffset;
 
         foreach (var habit in user.Habits)
         {
             var logs = habit.Logs.OrderByDescending(l => l.Date).ToList();
             if (logs.Any(l => l.IsCompleted)) hasCompletedLog = true;
 
-            int currentStreak = CalculateStreak(logs);
+            int currentStreak = CalculateStreak(logs, userOffset);
             if (currentStreak > maxStreak) maxStreak = currentStreak;
         }
 
@@ -133,10 +134,10 @@ public class AchievementEvaluatorService
         }
     }
 
-    private static int CalculateStreak(List<HabitLog> logs)
+    private static int CalculateStreak(List<HabitLog> logs, int timeZoneOffset)
     {
         var streak = 0;
-        var date = DateTime.UtcNow.Date;
+        var date = DateTime.UtcNow.AddMinutes(timeZoneOffset).Date;
         foreach (var log in logs)
         {
             if (log.Date.Date == date && log.IsCompleted)

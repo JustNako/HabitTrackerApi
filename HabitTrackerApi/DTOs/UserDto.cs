@@ -9,4 +9,5 @@ public class UserDto
     public string Email { get; set; }
     public DateTime JoinedAt { get; set; }
     public bool IsPro { get; set; }
+    public bool HasPassword { get; set; }
 }

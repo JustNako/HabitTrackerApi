@@ -1,34 +1,52 @@
 using System.Text;
 using System.Text.Json;
+using HabitTrackerApi.DTOs;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace HabitTrackerApi.Services;
 
 public class AiService
 {
     private readonly HttpClient _httpClient;
-    private readonly string _apiKey;
+    private readonly string? _apiKey;
+    private readonly ILogger<AiService> _logger;
     private const string Model = "llama-3.3-70b-versatile";
+    private const string GroqChatUrl = "https://api.groq.com/openai/v1/chat/completions";
 
-    public AiService(HttpClient httpClient, IConfiguration config)
+    public AiService(HttpClient httpClient, IConfiguration config, ILogger<AiService> logger)
     {
         _httpClient = httpClient;
-        _apiKey = config["Groq:ApiKey"] ?? throw new InvalidOperationException("Groq API Key is missing.");
+        _logger = logger;
+        var key = config["Groq:ApiKey"];
+        _apiKey = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        if (_apiKey == null)
+            _logger.LogWarning("Groq:ApiKey is not configured. AI features will use fallback responses.");
     }
 
-    public async Task<List<string>> GenerateInsightsAsync(string prompt)
+    public async Task<AiGenerationResult> GenerateInsightsAsync(string prompt)
     {
-        var url = "https://api.groq.com/openai/v1/chat/completions";
-
-        var requestBody = new
+        if (_apiKey == null)
         {
-            model = Model,
-            messages = new[]
+            return new AiGenerationResult
             {
-                new
+                Insights = DefaultInsights(),
+                IsPersonalized = false,
+                FailureReason = "AI is not configured on the server (missing Groq API key)."
+            };
+        }
+
+        try
+        {
+            var requestBody = new
+            {
+                model = Model,
+                messages = new[]
                 {
-                    role = "system",
-                    content = @"You are an Empathetic Lifestyle Teammate and Habit Partner. Your goal is to help the user stay consistent without feeling overwhelmed or guilty. You focus on 'Progress over Perfection'.
+                    new
+                    {
+                        role = "system",
+                        content = @"You are an Empathetic Lifestyle Teammate and Habit Partner. Your goal is to help the user stay consistent without feeling overwhelmed or guilty. You focus on 'Progress over Perfection'.
                     
                     CRITICAL RULES:
                     1. EMPATHY FIRST: If consistency is low, do NOT criticize. Instead, suggest 'Scaling Down' (e.g., 'If 30 mins is too much today, just do 2 mins to keep the rhythm').
@@ -39,59 +57,140 @@ public class AiService
                     6. TIME-BASED PATTERNS: Analyze the scheduled times of habits (if provided). Identify if the user is more successful with morning, afternoon, or evening habits, and suggest optimizations (e.g., 'Moving your Gym session to 18:30 since your evening routines are so solid!').
                     
                     FORMAT: Return ONLY a raw JSON array of 3 strings. Each string should be 2-3 sentences long."
+                    },
+                    new
+                    {
+                        role = "user",
+                        content = prompt
+                    }
                 },
-                new
+                temperature = 0.7,
+                max_tokens = 400
+            };
+
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var (contentString, groqError) = await PostChatAndGetContentAsync(requestBody, jsonOptions);
+            if (groqError != null)
+            {
+                return new AiGenerationResult
                 {
-                    role = "user",
-                    content = prompt
-                }
-            },
-            temperature = 0.7,
-            max_tokens = 400
-        };
+                    Insights = DefaultInsights(),
+                    IsPersonalized = false,
+                    FailureReason = groqError
+                };
+            }
 
-        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
+            if (string.IsNullOrWhiteSpace(contentString))
+            {
+                return new AiGenerationResult
+                {
+                    Insights = DefaultInsights(),
+                    IsPersonalized = false,
+                    FailureReason = "AI returned an empty response."
+                };
+            }
 
-        _httpClient.DefaultRequestHeaders.Remove("Authorization");
-        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+            var insights = ParseJsonStringArray(contentString, jsonOptions);
+            if (insights.Count == 0)
+            {
+                _logger.LogWarning("Failed to parse AI insights JSON. Raw: {Raw}", contentString);
+                return new AiGenerationResult
+                {
+                    Insights = DefaultInsights(),
+                    IsPersonalized = false,
+                    FailureReason = "Could not parse AI response. Try again in a moment."
+                };
+            }
 
-        var response = await _httpClient.PostAsync(url, content);
-
-        if (!response.IsSuccessStatusCode)
-            throw new Exception($"Groq API failed: {await response.Content.ReadAsStringAsync()}");
-
-        var responseString = await response.Content.ReadAsStringAsync();
-        using var document = JsonDocument.Parse(responseString);
-
-        var contentString = document.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString() ?? "[]";
-
-        // Groq sometimes wraps json in ```json ... ``` blocks.
-        if (contentString.StartsWith("```json"))
-        {
-            contentString = contentString.Substring(7);
-            if (contentString.EndsWith("```"))
-                contentString = contentString.Substring(0, contentString.Length - 3);
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<string>>(contentString, jsonOptions) ?? new List<string>();
+            return new AiGenerationResult
+            {
+                Insights = insights,
+                IsPersonalized = true
+            };
         }
         catch (Exception ex)
         {
-            throw new Exception($"Failed to parse AI response: {contentString}", ex);
+            _logger.LogError(ex, "GenerateInsightsAsync failed");
+            return new AiGenerationResult
+            {
+                Insights = DefaultInsights(),
+                IsPersonalized = false,
+                FailureReason = "AI service error. Please try again later."
+            };
         }
     }
 
+    private async Task<(string? Content, string? Error)> PostChatAndGetContentAsync(object requestBody, JsonSerializerOptions jsonOptions)
+    {
+        int maxRetries = 2;
+        int delayMs = 1000;
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
+                using var request = new HttpRequestMessage(HttpMethod.Post, GroqChatUrl);
+                request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+                request.Content = content;
+
+                var response = await _httpClient.SendAsync(request);
+                var responseString = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    using var document = JsonDocument.Parse(responseString);
+                    var text = document.RootElement
+                        .GetProperty("choices")[0]
+                        .GetProperty("message")
+                        .GetProperty("content")
+                        .GetString();
+
+                    return (text, null);
+                }
+
+                _logger.LogWarning("Groq API returned {StatusCode} (Attempt {Attempt}/{Max}): {Body}", response.StatusCode, attempt + 1, maxRetries + 1, responseString);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && attempt < maxRetries)
+                {
+                    await Task.Delay(delayMs);
+                    delayMs *= 2; // exponential backoff
+                    continue;
+                }
+
+                var hint = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "Invalid or expired Groq API key."
+                    : $"Groq API error ({(int)response.StatusCode}).";
+                return (null, hint);
+            }
+            catch (Exception ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning(ex, "Transient exception in Groq call (Attempt {Attempt}/{Max})", attempt + 1, maxRetries + 1);
+                await Task.Delay(delayMs);
+                delayMs *= 2;
+            }
+        }
+
+        return (null, "AI service is currently busy. Please try again in a moment.");
+    }
+
+    private static List<string> ParseJsonStringArray(string raw, JsonSerializerOptions jsonOptions)
+    {
+        var cleanText = raw.Replace("```json", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("```", "")
+            .Trim();
+
+        var startIndex = cleanText.IndexOf('[');
+        var endIndex = cleanText.LastIndexOf(']');
+        if (startIndex != -1 && endIndex > startIndex)
+            cleanText = cleanText.Substring(startIndex, endIndex - startIndex + 1);
+
+        return JsonSerializer.Deserialize<List<string>>(cleanText, jsonOptions) ?? new List<string>();
+    }
 
     public async Task<string> GenerateNotificationMessageAsync(string prompt)
     {
-        var url = "https://api.groq.com/openai/v1/chat/completions";
+        if (_apiKey == null) return DefaultNotification();
 
         var requestBody = new
         {
@@ -114,39 +213,17 @@ public class AiService
         };
 
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
+        var (text, error) = await PostChatAndGetContentAsync(requestBody, jsonOptions);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-        request.Content = content;
+        if (string.IsNullOrWhiteSpace(text)) return DefaultNotification();
 
-        try
-        {
-            var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return DefaultNotification();
-
-            var responseString = await response.Content.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(responseString);
-
-            var text = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-
-            if (string.IsNullOrWhiteSpace(text)) return DefaultNotification();
-
-            return text.Replace("\"", "").Trim();
-        }
-        catch
-        {
-            return DefaultNotification();
-        }
+        return text.Replace("\"", "").Trim();
     }
 
     public async Task<List<HabitTrackerApi.DTOs.AiHabitDto>> GenerateHabitRoutineAsync(string userPrompt)
     {
-        var url = "https://api.groq.com/openai/v1/chat/completions";
+        if (_apiKey == null)
+            throw new InvalidOperationException("AI habit generation is not configured on the server.");
 
         var requestBody = new
         {
@@ -188,28 +265,7 @@ Example for flexible schedule:
         };
 
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
-
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-        request.Content = content;
-
-        var response = await _httpClient.SendAsync(request);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            throw new Exception($"Failed to generate routine: {response.StatusCode} - {error}");
-        }
-
-        var responseString = await response.Content.ReadAsStringAsync();
-        using var document = JsonDocument.Parse(responseString);
-
-        var text = document.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        var (text, error) = await PostChatAndGetContentAsync(requestBody, jsonOptions);
 
         if (string.IsNullOrWhiteSpace(text)) return new List<HabitTrackerApi.DTOs.AiHabitDto>();
 
@@ -238,7 +294,8 @@ Example for flexible schedule:
 
     public async Task<string> GenerateMonthlyRecapInsightAsync(string prompt)
     {
-        var url = "https://api.groq.com/openai/v1/chat/completions";
+        if (_apiKey == null)
+            return "You did a great job this month! Keep pushing towards your goals.";
 
         var requestBody = new
         {
@@ -261,31 +318,138 @@ Example for flexible schedule:
         };
 
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var content = new StringContent(JsonSerializer.Serialize(requestBody, jsonOptions), Encoding.UTF8, "application/json");
+        var (text, error) = await PostChatAndGetContentAsync(requestBody, jsonOptions);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-        request.Content = content;
+        return text?.Trim() ?? "Focus on consistency to unlock your true potential next month.";
+    }
+
+    public async Task<BehavioralAnalysisResult> GenerateBehavioralAnalysisAsync(string prompt, BehavioralAnalysisDto fallback)
+    {
+        if (_apiKey == null)
+        {
+            return new BehavioralAnalysisResult
+            {
+                Analysis = fallback,
+                IsPersonalized = false,
+                FailureReason = "AI is not configured on the server (missing Groq API key)."
+            };
+        }
 
         try
         {
-            var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return "You did a great job this month! Keep pushing towards your goals.";
+            var requestBody = new
+            {
+                model = Model,
+                response_format = new { type = "json_object" },
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "system",
+                        content = @"You are a behavioral insights agent. Your task is to analyze the user's habit completion logs and identify clear patterns of friction, and provide a constructive AI Prescription with concrete settings adjustments.
+                        
+                        CRITICAL FORMAT: You MUST respond with a JSON object matching this schema exactly:
+                        {
+                          ""rhythm"": {
+                            ""completed"": int, // Percentage of completed logs (0-100)
+                            ""partial"": int,    // Percentage of partial check-ins (0-100, visual mockup concept, make this up so that completed + partial + missed = 100)
+                            ""missed"": int     // Percentage of missed logs (0-100)
+                          },
+                          ""frictionPatterns"": [
+                            {
+                              ""icon"": ""string"", // MUST be one of: ""moon"" (for evening slumps/late night issues), ""friction"" (for broken streaks/too high goals), ""alarm"" (for reminder time optimizations)
+                              ""pattern"": ""string"" // An empathetic, interesting insight in English (1 sentence). Do not start with capital letters for habit titles unless they are proper nouns (e.g. 'book reading' instead of 'Book reading').
+                            }
+                          ],
+                          ""aiPrescription"": {
+                            ""text"": ""string"", // An empathetic, friendly, and supportive recommendation paragraph in English (2-3 sentences max). Recommend reducing page counts or rescheduling reminders.
+                            ""actions"": [
+                              {
+                                ""habitId"": ""string"", // The ID of the habit (Guid) as a string
+                                ""habitTitle"": ""string"", // The exact title of the habit
+                                ""type"": ""string"", // MUST be one of: ""ReduceTarget"", ""IncreaseTarget"", ""Reschedule""
+                                ""currentValue"": ""string"", // e.g. ""20 pages"" or ""08:00""
+                                ""newValue"": ""string"", // e.g. ""10 pages"" or ""07:30""
+                                ""actionText"": ""string"", // MUST be ""Reduce target"", ""Increase target"", or ""Reschedule""
+                                ""payload"": {
+                                  ""targetDays"": int, // REQUIRED for target actions — the NEW numeric daily goal (e.g. 10 for ""10 pages"", not the delta)
+                                  ""timeOfDay"": ""string"" // REQUIRED for reschedule — ""HH:mm"" 24-hour format (e.g. ""07:30"")
+                                }
+                              }
+                            ]
+                          }
+                        }
 
-            var responseString = await response.Content.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(responseString);
+                        Provide exactly 3 friction patterns. Provide exactly 1 or 2 settings adjustment actions under aiPrescription.actions. Use habit IDs from the prompt so we can match and perform settings adaptation.
+                        
+                        CRITICAL RULES:
+                        1. If the user has a perfect or very high completion rate (e.g., 90%-100%), praise their consistency in the `aiPrescription.text` (saying that everything is already going perfectly), but still suggest optional micro-adjustments or challenge adjustments in the actions (e.g. scaling up a target, like increasing target pages from 10 to 15, or fine-tuning schedules) to help them progress further. For scaling up, set type to ""IncreaseTarget"" and actionText to ""Increase target"".
+                        2. Do not suggest reducing a habit's target if the current target is already very low (e.g. less than 5 pages, 10 minutes, or 1 unit) or if the habit has a high completion rate (e.g. above 70%). Never suggest reducing any target to less than 1. If no actions are suitable, do not return any actions in the actions list."
+                    },
+                    new
+                    {
+                        role = "user",
+                        content = prompt
+                    }
+                },
+                temperature = 0.5,
+                max_tokens = 800
+            };
 
-            var text = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var (contentString, groqError) = await PostChatAndGetContentAsync(requestBody, jsonOptions);
+            if (groqError != null)
+            {
+                return new BehavioralAnalysisResult
+                {
+                    Analysis = fallback,
+                    IsPersonalized = false,
+                    FailureReason = groqError
+                };
+            }
 
-            return text?.Trim() ?? "Focus on consistency to unlock your true potential next month.";
+            if (string.IsNullOrWhiteSpace(contentString))
+            {
+                return new BehavioralAnalysisResult
+                {
+                    Analysis = fallback,
+                    IsPersonalized = false,
+                    FailureReason = "AI returned an empty response."
+                };
+            }
+
+            // Parse JSON object
+            var cleanText = contentString.Replace("```json", "", StringComparison.OrdinalIgnoreCase)
+                                         .Replace("```", "")
+                                         .Trim();
+            
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var analysis = JsonSerializer.Deserialize<BehavioralAnalysisDto>(cleanText, options);
+            if (analysis == null || analysis.FrictionPatterns.Count == 0)
+            {
+                return new BehavioralAnalysisResult
+                {
+                    Analysis = fallback,
+                    IsPersonalized = false,
+                    FailureReason = "Could not parse AI response or response was empty."
+                };
+            }
+
+            return new BehavioralAnalysisResult
+            {
+                Analysis = analysis,
+                IsPersonalized = true
+            };
         }
-        catch
+        catch (Exception ex)
         {
-            return "Focus on consistency to unlock your true potential next month.";
+            _logger.LogError(ex, "GenerateBehavioralAnalysisAsync failed");
+            return new BehavioralAnalysisResult
+            {
+                Analysis = fallback,
+                IsPersonalized = false,
+                FailureReason = "AI service error. Please try again later."
+            };
         }
     }
 

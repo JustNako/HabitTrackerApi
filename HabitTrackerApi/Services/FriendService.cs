@@ -67,7 +67,7 @@ public class FriendService
             await _notifications.SendAsync(
                 addressee.FcmToken,
                 title: "New Friend Request",
-                body: $"{requester.UserName} wants to be your friend on Streakz!",
+                body: $"{requester.UserName} wants to be your friend on Flow!",
                 data: new Dictionary<string, string> { ["type"] = "friend_request" }
             );
         }
@@ -131,7 +131,6 @@ public class FriendService
             .ToListAsync();
 
         var result = new List<FriendDto>();
-        var weekStart = DateTime.UtcNow.Date.AddDays(-7);
 
         foreach (var f in friendships)
         {
@@ -139,16 +138,19 @@ public class FriendService
             var friendUser = await _userManager.FindByIdAsync(friendId);
             if (friendUser == null) continue;
 
+            var friendOffset = friendUser.TimeZoneOffset;
+            var weekStart = DateTime.UtcNow.AddMinutes(friendOffset).Date.AddDays(-7);
+
             var habits = await _context.Habits
-                .Include(h => h.Logs.Where(l => l.Date >= weekStart))
+                .Include(h => h.Logs)
                 .Where(h => h.UserId == friendId && h.IsPublic)
                 .ToListAsync();
 
             var publicHabits = habits.Select(h => new PublicHabitDto
             {
                 Title = h.Title,
-                CompletedThisWeek = h.Logs.Count(l => l.IsCompleted),
-                CurrentStreak = CalculateStreak(h.Logs.OrderByDescending(l => l.Date).ToList())
+                CompletedThisWeek = h.Logs.Count(l => l.IsCompleted && l.Date >= weekStart),
+                CurrentStreak = CalculateStreak(h.Logs.OrderByDescending(l => l.Date).ToList(), friendOffset)
             }).ToList();
 
             result.Add(new FriendDto
@@ -182,18 +184,101 @@ public class FriendService
             .ToListAsync();
     }
 
-    private static int CalculateStreak(List<HabitLog> logs)
+    // Get list of suggested users
+    public async Task<List<SuggestedUserDto>> GetSuggestions(string userId, int limit = 10)
     {
-        var streak = 0;
-        var date = DateTime.UtcNow.Date;
-        foreach (var log in logs)
+        // Get all user IDs involved in friendships with the current user (either requester or addressee)
+        var connectedUserIds = await _context.Friendships
+            .Where(f => f.RequesterId == userId || f.AddresseeId == userId)
+            .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
+            .ToListAsync();
+
+        // Also exclude the current user themselves
+        connectedUserIds.Add(userId);
+
+        // Fetch suggested users (excluding connected ones)
+        var suggestions = await _userManager.Users
+            .Where(u => !connectedUserIds.Contains(u.Id))
+            .OrderByDescending(u => u.JoinedAt) // Suggest newer/recently active users first
+            .Take(limit)
+            .Select(u => new SuggestedUserDto
+            {
+                Id = u.Id,
+                UserName = u.UserName ?? "Unknown",
+                IsPro = u.IsPro
+            })
+            .ToListAsync();
+
+        return suggestions;
+    }
+
+    // Send a friend request using user's Id directly
+    public async Task<(bool Success, string Error)> SendRequestById(string requesterId, string addresseeId)
+    {
+        if (requesterId == addresseeId)
+            return (false, "You cannot add yourself.");
+
+        var addressee = await _userManager.FindByIdAsync(addresseeId);
+        if (addressee == null)
+            return (false, "User not found.");
+
+        var existing = await _context.Friendships.FirstOrDefaultAsync(f =>
+            (f.RequesterId == requesterId && f.AddresseeId == addresseeId) ||
+            (f.RequesterId == addresseeId && f.AddresseeId == requesterId));
+
+        if (existing != null)
+            return (false, existing.Status == FriendshipStatus.Accepted
+                ? "You are already friends."
+                : "A friend request already exists.");
+
+        _context.Friendships.Add(new Friendship
         {
-            if (log.Date.Date == date && log.IsCompleted)
+            RequesterId = requesterId,
+            AddresseeId = addresseeId
+        });
+        await _context.SaveChangesAsync();
+
+        // 🔔 Notify the target user about the incoming friend request
+        var requester = await _userManager.FindByIdAsync(requesterId);
+        if (addressee.FcmToken != null && requester != null)
+        {
+            await _notifications.SendAsync(
+                addressee.FcmToken,
+                title: "New Friend Request",
+                body: $"{requester.UserName} wants to be your friend on Flow!",
+                data: new Dictionary<string, string> { ["type"] = "friend_request" }
+            );
+        }
+
+        return (true, string.Empty);
+    }
+
+    private static int CalculateStreak(List<HabitLog> logs, int timeZoneOffset)
+    {
+        var logsDates = logs.Where(l => l.IsCompleted)
+                            .Select(l => l.Date.Date)
+                            .Distinct()
+                            .OrderByDescending(d => d)
+                            .ToList();
+
+        if (!logsDates.Any()) return 0;
+
+        var today = DateTime.UtcNow.AddMinutes(timeZoneOffset).Date;
+        var todayCompleted = logsDates.Contains(today);
+        var expected = todayCompleted ? today : today.AddDays(-1);
+
+        int streak = 0;
+        foreach (var logDate in logsDates)
+        {
+            if (logDate == expected)
             {
                 streak++;
-                date = date.AddDays(-1);
+                expected = expected.AddDays(-1);
             }
-            else break;
+            else if (logDate < expected)
+            {
+                break;
+            }
         }
         return streak;
     }

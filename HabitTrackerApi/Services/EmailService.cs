@@ -37,23 +37,36 @@ public class EmailService
                 <head>
                   <meta charset="UTF-8">
                   <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0C1017; margin: 0; padding: 40px 20px; }
-                    .card { max-width: 480px; margin: 0 auto; background: #161A22; border-radius: 20px; padding: 40px; border: 1px solid #262A34; }
-                    .logo { text-align: center; font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-                    .logo span { background: linear-gradient(135deg, #DA22FF, #9733EE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-                    .title { text-align: center; color: #fff; font-size: 22px; font-weight: 600; margin: 24px 0 12px; }
-                    .subtitle { text-align: center; color: #8A8F9E; font-size: 15px; line-height: 1.6; margin-bottom: 32px; }
-                    .button { display: block; background: linear-gradient(135deg, #DA22FF, #9733EE); color: #fff; text-decoration: none; text-align: center; padding: 16px 32px; border-radius: 14px; font-size: 16px; font-weight: 600; margin: 0 auto; }
-                    .footer { text-align: center; color: #4A4F5E; font-size: 12px; margin-top: 32px; }
+                    /* Typography: Fallback to system sans-serif for body, but prioritizing serif for headings if available */
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #121212; margin: 0; padding: 40px 20px; }
+                    
+                    /* The Bento Card: Matte charcoal background, ultra-rounded borders */
+                    .card { max-width: 480px; margin: 0 auto; background: #1A1A1A; border-radius: 32px; padding: 48px 40px; border: 1px solid #2A2A2A; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+                    
+                    /* Logo & Title: Elegant, breathing serif aesthetic */
+                    .logo { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 500; color: #E8EBE9; letter-spacing: 0.5px; }
+                    .title { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; color: #F5F5F5; font-size: 24px; font-weight: 400; margin: 24px 0 16px; }
+                    
+                    /* Muted, empathetic copy */
+                    .subtitle { text-align: center; color: #9CA3AF; font-size: 16px; font-weight: 300; line-height: 1.6; margin-bottom: 40px; }
+                    
+                    /* Main CTA: Plush pill-shaped button in soft Sage Green */
+                    .button { display: inline-block; background: #96B0A0; color: #151515; text-decoration: none; text-align: center; padding: 16px 36px; border-radius: 40px; font-size: 16px; font-weight: 500; margin: 0 auto; width: max-content; }
+                    .button-container { text-align: center; }
+                    
+                    /* Gentle footer */
+                    .footer { text-align: center; color: #6B7280; font-size: 13px; font-weight: 300; margin-top: 40px; line-height: 1.5; }
                   </style>
                 </head>
                 <body>
                   <div class="card">
-                    <div class="logo"><span>Flow</span></div>
-                    <div class="title">Confirm your email</div>
-                    <div class="subtitle">Hi {{userName}}!<br>Click the button below to confirm your account and start building great habits.</div>
-                    <a href="{{confirmationLink}}" class="button">Confirm Email</a>
-                    <div class="footer">This link expires in 24 hours. If you didn't create a Flow account, you can ignore this email.</div>
+                    <div class="logo">Flow</div>
+                    <div class="title">Begin your journey</div>
+                    <div class="subtitle">Welcome to your space, {{userName}}.<br><br>Take a deep breath. Click the button below to confirm your email and step into a calmer routine.</div>
+                    <div class="button-container">
+                      <a href="{{confirmationLink}}" class="button">Confirm Email</a>
+                    </div>
+                    <div class="footer">This link expires in 24 hours.<br>If you didn't create an account, you can safely ignore this message.</div>
                   </div>
                 </body>
                 </html>
@@ -100,22 +113,36 @@ public class EmailService
                 <head>
                   <meta charset="UTF-8">
                   <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0C1017; margin: 0; padding: 40px 20px; }
-                    .card { max-width: 480px; margin: 0 auto; background: #161A22; border-radius: 20px; padding: 40px; border: 1px solid #262A34; }
-                    .logo { text-align: center; font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-                    .logo span { background: linear-gradient(135deg, #DA22FF, #9733EE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-                    .title { text-align: center; color: #fff; font-size: 22px; font-weight: 600; margin: 24px 0 12px; }
-                    .subtitle { text-align: center; color: #8A8F9E; font-size: 15px; line-height: 1.6; margin-bottom: 32px; }
-                    .button { display: block; background: linear-gradient(135deg, #DA22FF, #9733EE); color: #fff; text-decoration: none; text-align: center; padding: 16px 32px; border-radius: 14px; font-size: 16px; font-weight: 600; margin: 0 auto; }
-                    .footer { text-align: center; color: #4A4F5E; font-size: 12px; margin-top: 32px; }
+                    /* Typography: System sans-serif for body, elegant serif for headings */
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #121212; margin: 0; padding: 40px 20px; }
+                    
+                    /* The Bento Card: Matte charcoal background, ultra-rounded borders */
+                    .card { max-width: 480px; margin: 0 auto; background: #1A1A1A; border-radius: 32px; padding: 48px 40px; border: 1px solid #2A2A2A; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+                    
+                    /* Logo & Title: Breathing serif aesthetic */
+                    .logo { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 500; color: #E8EBE9; letter-spacing: 0.5px; }
+                    .title { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; color: #F5F5F5; font-size: 24px; font-weight: 400; margin: 24px 0 16px; }
+                    
+                    /* Muted, empathetic copy */
+                    .subtitle { text-align: center; color: #9CA3AF; font-size: 16px; font-weight: 300; line-height: 1.6; margin-bottom: 40px; }
+                    
+                    /* Main CTA: Plush pill-shaped button in Soft Lavender for recovery */
+                    .button { display: inline-block; background: #B4A9C8; color: #151515; text-decoration: none; text-align: center; padding: 16px 36px; border-radius: 40px; font-size: 16px; font-weight: 500; margin: 0 auto; width: max-content; }
+                    .button-container { text-align: center; }
+                    
+                    /* Gentle footer */
+                    .footer { text-align: center; color: #6B7280; font-size: 13px; font-weight: 300; margin-top: 40px; line-height: 1.5; }
                   </style>
                 </head>
                 <body>
                   <div class="card">
-                    <div class="logo"><span>Flow</span></div>
-                    <div class="title">Reset Password</div>
-                    <div class="subtitle">Hi {{userName}}!<br>Click the button below to reset your password. If you didn't request this, you can safely ignore this email.</div>
-                    <a href="{{resetLink}}" class="button">Reset Password</a>
+                    <div class="logo">Flow</div>
+                    <div class="title">Find your way back</div>
+                    <div class="subtitle">Breathe, it happens, {{userName}}.<br><br>Click the button below to quietly reset your password and return to your routine.</div>
+                    <div class="button-container">
+                      <a href="{{resetLink}}" class="button">Reset Password</a>
+                    </div>
+                    <div class="footer">If you didn't request a reset, you can safely ignore this message.<br>Your sanctuary remains secure.</div>
                   </div>
                 </body>
                 </html>

@@ -67,4 +67,20 @@ public class FriendsController : ControllerBase
         var requests = await _service.GetPendingRequests(UserId);
         return Ok(requests);
     }
+
+    /// <summary>Get suggested friends.</summary>
+    [HttpGet("suggestions")]
+    public async Task<IActionResult> GetSuggestions()
+    {
+        var suggestions = await _service.GetSuggestions(UserId);
+        return Ok(suggestions);
+    }
+
+    /// <summary>Send a friend request using user ID.</summary>
+    [HttpPost("request/{userId}")]
+    public async Task<IActionResult> SendRequestById(string userId)
+    {
+        var (success, error) = await _service.SendRequestById(UserId, userId);
+        return success ? Ok(new { message = "Friend request sent!" }) : BadRequest(new { message = error });
+    }
 }

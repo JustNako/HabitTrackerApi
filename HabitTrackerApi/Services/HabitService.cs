@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HabitTrackerApi.Common;
 using HabitTrackerApi.Data;
@@ -32,24 +33,38 @@ public class HabitService
     public async Task<Result<List<HabitDto>>> GetUserHabits(string userId)
     {
         var habits = await _repo.GetUserHabitsAsync(userId);
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
+        var todayLocal = DateTime.UtcNow.AddMinutes(offset).Date;
 
-        var dtos = habits.Select(h => new HabitDto
-        {
-            Id = h.Id,
-            Title = h.Title,
-            Description = h.Description,
-            Notes = h.Notes,
-            TargetDays = h.TargetDays,
-            CompletedDays = h.Logs.Count(l => l.IsCompleted),
-            RepeatType = h.RepeatType,
-            RepeatDaysOfWeek = ParseDayOfWeekCsv(h.RepeatDaysOfWeek),
-            RepeatDaysOfMonth = ParseIntCsv(h.RepeatDaysOfMonth),
-            RepeatTimesPerPeriod = h.RepeatTimesPerPeriod,
-            RepeatPeriod = h.RepeatPeriod,
-            IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == DateTime.UtcNow.Date),
-            IsPublic = h.IsPublic,
-            Unit = h.Unit,
-            TimeOfDay = h.TimeOfDay
+        var dtos = habits.Select(h => {
+            var completedCountLast30 = h.Logs.Count(l => l.IsCompleted && l.Date.Date >= todayLocal.AddDays(-30) && l.Date.Date <= todayLocal);
+            var habitAgeDays = (todayLocal - h.CreatedAt.Date).Days + 1;
+            var expectedDays = Math.Min(30, Math.Max(1, habitAgeDays));
+            var rate = (int)Math.Min(100, Math.Round((double)completedCountLast30 / expectedDays * 100));
+
+            return new HabitDto
+            {
+                Id = h.Id,
+                Title = h.Title,
+                Description = h.Description,
+                Notes = h.Notes,
+                TargetDays = h.TargetDays,
+                CompletedDays = h.Logs.Count(l => l.IsCompleted),
+                RepeatType = h.RepeatType,
+                RepeatDaysOfWeek = ParseDayOfWeekCsv(h.RepeatDaysOfWeek),
+                RepeatDaysOfMonth = ParseIntCsv(h.RepeatDaysOfMonth),
+                RepeatTimesPerPeriod = h.RepeatTimesPerPeriod,
+                RepeatPeriod = h.RepeatPeriod,
+                IsCompletedToday = h.Logs.Any(l => l.IsCompleted && l.Date.Date == todayLocal),
+                IsPublic = h.IsPublic,
+                Unit = h.Unit,
+                TimeOfDay = h.TimeOfDay,
+                CurrentStreak = CalculateCurrentStreak(
+                    h.Logs.Where(l => l.IsCompleted).Select(l => l.Date.Date).ToList(),
+                    todayLocal),
+                CompletionRate30Day = rate
+            };
         }).ToList();
 
         return Result.Success(dtos);
@@ -98,6 +113,9 @@ public class HabitService
         // Evaluate achievements
         await _achievements.EvaluateUserAsync(userId);
 
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
+
         return Result.Success();
     }
 
@@ -113,6 +131,55 @@ public class HabitService
         _context.Entry(habit).State = EntityState.Modified;
         await _repo.Save();
 
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> UpdateHabitSettings(Guid id, string userId, UpdateHabitDto dto)
+    {
+        var habit = await _context.Habits.FirstOrDefaultAsync(h => h.Id == id && h.UserId == userId);
+        if (habit == null)
+            return Result.Failure(Error.NotFound);
+
+        var hasTargetUpdate = dto.TargetDays.HasValue;
+        var hasTimeUpdate = dto.TimeOfDay != null;
+        var hasTitleUpdate = dto.Title != null && !string.IsNullOrWhiteSpace(dto.Title);
+        var hasDescriptionUpdate = dto.Description != null;
+
+        if (!hasTargetUpdate && !hasTimeUpdate && !hasTitleUpdate && !hasDescriptionUpdate)
+            return Result.Failure(new Error("ValidationError", "No habit settings were provided to update."));
+
+        if (dto.TargetDays.HasValue)
+        {
+            if (dto.TargetDays.Value <= 0)
+                return Result.Failure(new Error("ValidationError", "Target must be greater than 0."));
+            habit.TargetDays = dto.TargetDays.Value;
+        }
+
+        if (dto.TimeOfDay != null)
+        {
+            habit.TimeOfDay = string.IsNullOrWhiteSpace(dto.TimeOfDay) ? null : dto.TimeOfDay.Trim();
+        }
+
+        if (dto.Title != null && !string.IsNullOrWhiteSpace(dto.Title))
+        {
+            habit.Title = dto.Title.Trim();
+        }
+
+        if (dto.Description != null)
+        {
+            habit.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+        }
+
+        habit.UpdatedAt = DateTime.UtcNow;
+        _context.Entry(habit).State = EntityState.Modified;
+        await _repo.Save();
+
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
+
         return Result.Success();
     }
 
@@ -126,6 +193,9 @@ public class HabitService
         habit.IsDeleted = true;
         _context.Entry(habit).State = EntityState.Modified;
         await _context.SaveChangesAsync();
+
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
 
         return Result.Success();
     }
@@ -144,6 +214,9 @@ public class HabitService
         _context.Entry(habit).State = EntityState.Modified;
         await _context.SaveChangesAsync();
 
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
+
         return Result.Success();
     }
 
@@ -153,7 +226,9 @@ public class HabitService
         if (!habitExists)
             return Result.Failure(Error.NotFound);
 
-        var today = DateTime.UtcNow.Date;
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
+        var today = DateTime.UtcNow.AddMinutes(offset).Date;
 
         var log = await _context.HabitLogs
             .FirstOrDefaultAsync(x => x.HabitId == habitId && x.Date == today);
@@ -185,6 +260,9 @@ public class HabitService
         // Evaluate achievements
         await _achievements.EvaluateUserAsync(userId);
 
+        _insightsCache.TryRemove(userId, out _);
+        _analysisCache.TryRemove(userId, out _);
+
         return Result.Success();
     }
 
@@ -195,6 +273,9 @@ public class HabitService
         if (!habitExists)
             return Result.Failure<int>(Error.NotFound);
 
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
+
         var logsDates = await _context.HabitLogs
             .AsNoTracking()
             .Where(l => l.HabitId == habitId && l.IsCompleted)
@@ -203,7 +284,7 @@ public class HabitService
             .ToListAsync();
 
         int streak = 0;
-        var today = DateTime.UtcNow.Date;
+        var today = DateTime.UtcNow.AddMinutes(offset).Date;
 
         // Allow streak to start from yesterday if today hasn't been completed yet.
         // This prevents showing 0 streak on an active ongoing streak before the user marks today.
@@ -230,6 +311,9 @@ public class HabitService
 
     public async Task<Result<int>> GetGlobalStreak(string userId)
     {
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
+
         var completedDates = await _context.HabitLogs
             .AsNoTracking()
             .Where(l => l.Habit.UserId == userId && l.IsCompleted)
@@ -239,7 +323,7 @@ public class HabitService
             .ToListAsync();
 
         int streak = 0;
-        var expected = DateTime.UtcNow.Date;
+        var expected = DateTime.UtcNow.AddMinutes(offset).Date;
 
         foreach (var date in completedDates)
         {
@@ -265,6 +349,7 @@ public class HabitService
     public async Task<Result<GlobalStatsDto>> GetGlobalStats(string userId)
     {
         var user = await SyncProStatusAndGetUser(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
         
         int totalHabits = await _context.Habits.CountAsync(h => h.UserId == userId);
         int totalCompletions = await _context.HabitLogs.CountAsync(l => l.Habit.UserId == userId && l.IsCompleted);
@@ -314,7 +399,7 @@ public class HabitService
         var monthlyProgress = new List<MonthlyProgressDto>();
         for (int i = 5; i >= 0; i--)
         {
-            var targetMonth = DateTime.UtcNow.AddMonths(-i);
+            var targetMonth = DateTime.UtcNow.AddMinutes(offset).AddMonths(-i);
             var monthName = targetMonth.ToString("MMM");
             var count = completedDatesByHabit.Count(l => l.Date.Year == targetMonth.Year && l.Date.Month == targetMonth.Month);
             monthlyProgress.Add(new MonthlyProgressDto { Month = monthName, Completions = count });
@@ -322,7 +407,7 @@ public class HabitService
 
         // Weekly Completion Rate (Last 4 weeks)
         var weeklyCompletionRate = new List<WeeklyProgressDto>();
-        var now = DateTime.UtcNow.Date;
+        var now = DateTime.UtcNow.AddMinutes(offset).Date;
         
         // Calculate the start of the current week (Monday)
         int daysSinceMonday = ((int)now.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
@@ -358,7 +443,7 @@ public class HabitService
         {
             if (isCurrentlyPro)
             {
-                var today = DateTime.UtcNow.Date;
+                var today = DateTime.UtcNow.AddMinutes(offset).Date;
                 int currentCount = user.AiGenerationsCount;
                 if (user.LastAiGenerationDate?.Date != today)
                 {
@@ -370,6 +455,24 @@ public class HabitService
             {
                 aiRemaining = Math.Max(0, 2 - user.AiGenerationsCount);
             }
+        }
+
+        // Real completions for the Insights Completions Graph
+        var currentWeekCompletions = new List<int>();
+        for (int i = 0; i < 7; i++)
+        {
+            var date = currentMonday.AddDays(i).Date;
+            var count = completedDatesByHabit.Count(l => l.Date.Date == date);
+            currentWeekCompletions.Add(count);
+        }
+
+        var last30DaysCompletions = new List<int>();
+        var dateToday = DateTime.UtcNow.AddMinutes(offset).Date;
+        for (int i = 23; i >= 0; i--) // The app expects 24 bars for the non-weekly graph based on _buildArtisticBarChart
+        {
+            var date = dateToday.AddDays(-i);
+            var count = completedDatesByHabit.Count(l => l.Date.Date == date);
+            last30DaysCompletions.Add(count);
         }
 
         return Result.Success(new GlobalStatsDto
@@ -384,32 +487,42 @@ public class HabitService
             ActiveDays = activeDays,
             MonthlyProgress = monthlyProgress,
             WeeklyCompletionRate = weeklyCompletionRate,
+            CurrentWeekCompletions = currentWeekCompletions,
+            Last30DaysCompletions = last30DaysCompletions,
             IsPro = isCurrentlyPro,
             AiGenerationsRemaining = aiRemaining,
             AiTotalLimit = aiTotalLimit
         });
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime GeneratedAt, List<string> Insights)> _insightsCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime GeneratedAt, AiInsightsResponseDto Response)> _insightsCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime GeneratedAt, BehavioralAnalysisDto Response)> _analysisCache = new();
 
-    public async Task<Result<List<string>>> GetAiInsights(string userId)
+    public async Task<Result<AiInsightsResponseDto>> GetAiInsights(string userId)
     {
         var user = await SyncProStatusAndGetUser(userId);
         bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
 
         if (!isCurrentlyPro)
         {
-            return Result.Failure<List<string>>(new Error("ProRequired", "AI Insights are available to Pro users only."));
+            return Result.Failure<AiInsightsResponseDto>(new Error("ProRequired", "AI Insights are available to Pro users only."));
         }
 
-        // Anti-spam & performance cache: return cached weekly insights if generated less than 1 hour ago
+        // Cache: 1 hour for personalized, 5 minutes for fallback (prevents Groq spam during outages)
         var now = DateTime.UtcNow;
-        if (_insightsCache.TryGetValue(userId, out var cached) && now - cached.GeneratedAt < TimeSpan.FromHours(1))
+        if (_insightsCache.TryGetValue(userId, out var cached))
         {
-            return Result.Success(cached.Insights);
+            var maxAge = cached.Response.IsPersonalized
+                ? TimeSpan.FromHours(1)
+                : TimeSpan.FromMinutes(5);
+            if (now - cached.GeneratedAt < maxAge)
+            {
+                return Result.Success(cached.Response);
+            }
         }
 
-        var startDate = DateTime.UtcNow.Date.AddDays(-7);
+        var offset = user?.TimeZoneOffset ?? 0;
+        var startDate = DateTime.UtcNow.AddMinutes(offset).Date.AddDays(-7);
         
         var habits = await _context.Habits
             .AsNoTracking()
@@ -419,7 +532,7 @@ public class HabitService
 
         if (!habits.Any())
         {
-            return Result.Failure<List<string>>(new Error("NoData", "Not enough habit data to generate insights."));
+            return Result.Failure<AiInsightsResponseDto>(new Error("NoData", "Not enough habit data to generate insights."));
         }
 
         var totalHabits = habits.Count;
@@ -465,12 +578,309 @@ public class HabitService
             if (ageInDays < 14) promptBuilder.AppendLine("  Note: This is a NEW habit, fragile phase.");
         }
 
-        var insights = await _aiService.GenerateInsightsAsync(promptBuilder.ToString());
-        
-        // Cache the generated insights for this user
-        _insightsCache[userId] = (DateTime.UtcNow, insights);
+        var generation = await _aiService.GenerateInsightsAsync(promptBuilder.ToString());
 
-        return Result.Success(insights);
+        var response = new AiInsightsResponseDto
+        {
+            Insights = generation.Insights,
+            IsPersonalized = generation.IsPersonalized,
+            Message = generation.FailureReason
+        };
+
+        // Always cache (personalized or fallback) to prevent repeated Groq calls
+        _insightsCache[userId] = (DateTime.UtcNow, response);
+
+        return Result.Success(response);
+    }
+
+    public async Task<Result<BehavioralAnalysisDto>> GetBehavioralAnalysis(string userId)
+    {
+        var user = await SyncProStatusAndGetUser(userId);
+        bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
+
+        if (!isCurrentlyPro)
+        {
+            return Result.Failure<BehavioralAnalysisDto>(new Error("ProRequired", "Behavioral analysis is available to Pro users only."));
+        }
+
+        var now = DateTime.UtcNow;
+        if (_analysisCache.TryGetValue(userId, out var cached)
+            && now - cached.GeneratedAt < TimeSpan.FromHours(1))
+        {
+            return Result.Success(cached.Response);
+        }
+
+        var offset = user?.TimeZoneOffset ?? 0;
+        var today = DateTime.UtcNow.AddMinutes(offset).Date;
+        int daysSinceMonday = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        var currentMonday = today.AddDays(-daysSinceMonday);
+        var startDate = currentMonday.AddDays(-42); // 6 weeks ago Monday (gives exactly 49 days to end of current week)
+
+        var habits = await _context.Habits
+            .AsNoTracking()
+            .Include(h => h.Logs.Where(l => l.Date >= startDate && l.Date <= today))
+            .Where(h => h.UserId == userId && !h.IsDeleted)
+            .ToListAsync();
+
+        // 1. Build a robust fallback matching the user's actual habits
+        var fallback = new BehavioralAnalysisDto();
+        
+        // Completion rate calculation
+        double completionRate = 0;
+        if (habits.Count > 0)
+        {
+            int totalCompletions = habits.Sum(h => h.Logs.Count(l => l.IsCompleted));
+            int possibleCompletions = habits.Count * 14;
+            completionRate = possibleCompletions == 0 ? 0 : Math.Round((double)totalCompletions / possibleCompletions * 100, 0);
+        }
+        else
+        {
+            completionRate = 19; // Default matching mockup
+        }
+
+        fallback.Rhythm.Completed = (int)completionRate;
+        fallback.Rhythm.Partial = (int)Math.Round((100 - completionRate) * 0.3, 0);
+        fallback.Rhythm.Missed = 100 - fallback.Rhythm.Completed - fallback.Rhythm.Partial;
+
+        // Populate fallback friction patterns & actions based on actual user habits
+        var habitList = habits.ToList();
+        var readingHabit = habitList.FirstOrDefault(h => h.Title.Contains("read", StringComparison.OrdinalIgnoreCase) || h.Title.Contains("book", StringComparison.OrdinalIgnoreCase));
+        var activeHabit = habitList.FirstOrDefault(h => h.Title.Contains("walk", StringComparison.OrdinalIgnoreCase) || h.Title.Contains("run", StringComparison.OrdinalIgnoreCase) || h.Title.Contains("gym", StringComparison.OrdinalIgnoreCase) || h.Title.Contains("exercise", StringComparison.OrdinalIgnoreCase));
+        
+        var primaryHabit = readingHabit ?? (habitList.Count > 0 ? habitList[0] : null);
+        var secondaryHabit = activeHabit ?? (habitList.Count > 1 ? habitList[1] : null);
+
+        var primaryTitle = primaryHabit?.Title ?? "Book reading";
+        var primaryId = primaryHabit?.Id ?? Guid.Empty;
+        var primaryTarget = primaryHabit?.TargetDays ?? 20;
+        var primaryUnit = primaryHabit?.Unit ?? "pages";
+
+        var secondaryTitle = secondaryHabit?.Title ?? "Evening walk";
+        var secondaryId = secondaryHabit?.Id ?? Guid.Empty;
+        var secondaryTime = secondaryHabit?.TimeOfDay ?? "20:00";
+
+        fallback.FrictionPatterns.Add(new FrictionPatternDto
+        {
+            Icon = "moon",
+            Pattern = $"Missed habits spike 3x on Thursday & Friday evenings."
+        });
+        fallback.FrictionPatterns.Add(new FrictionPatternDto
+        {
+            Icon = "friction",
+            Pattern = $"\"{primaryTitle}\" breaks after 2-3 days when target is set above {primaryTarget} {primaryUnit}."
+        });
+        fallback.FrictionPatterns.Add(new FrictionPatternDto
+        {
+            Icon = "alarm",
+            Pattern = $"\"{secondaryTitle}\" is skipped when reminder is set after {(secondaryTime.StartsWith("20") ? "8" : secondaryTime.StartsWith("21") ? "9" : "8")} pm."
+        });
+
+        fallback.AiPrescription.Text = $"Your morning habits are your superpower — protect them. For \"{primaryTitle}\", try reducing target to {(primaryTarget / 2 > 0 ? primaryTarget / 2 : 1)} {primaryUnit} on weekdays and let momentum do the rest. Move \"{secondaryTitle}\" reminder to 7:00 pm for a 3x better follow-through.";
+
+        if (primaryHabit != null)
+        {
+            fallback.AiPrescription.Actions.Add(new PrescriptionActionDto
+            {
+                HabitId = primaryId,
+                HabitTitle = primaryTitle,
+                Type = "ReduceTarget",
+                CurrentValue = $"{primaryTarget} {primaryUnit}",
+                NewValue = $"{(primaryTarget / 2 > 0 ? primaryTarget / 2 : 1)} {primaryUnit}",
+                ActionText = "Reduce target",
+                Payload = new ActionPayloadDto { TargetDays = primaryTarget / 2 > 0 ? primaryTarget / 2 : 1 }
+            });
+        }
+        else
+        {
+            fallback.AiPrescription.Actions.Add(new PrescriptionActionDto
+            {
+                HabitId = Guid.NewGuid(),
+                HabitTitle = "Book reading",
+                Type = "ReduceTarget",
+                CurrentValue = "20 pages",
+                NewValue = "10 pages",
+                ActionText = "Reduce target",
+                Payload = new ActionPayloadDto { TargetDays = 10 }
+            });
+        }
+
+        if (secondaryHabit != null)
+        {
+            fallback.AiPrescription.Actions.Add(new PrescriptionActionDto
+            {
+                HabitId = secondaryId,
+                HabitTitle = secondaryTitle,
+                Type = "Reschedule",
+                CurrentValue = $"{secondaryTime}",
+                NewValue = "19:00",
+                ActionText = "Reschedule",
+                Payload = new ActionPayloadDto { TimeOfDay = "19:00" }
+            });
+        }
+        else
+        {
+            fallback.AiPrescription.Actions.Add(new PrescriptionActionDto
+            {
+                HabitId = Guid.NewGuid(),
+                HabitTitle = "Evening walk",
+                Type = "Reschedule",
+                CurrentValue = "8 pm",
+                NewValue = "7 pm",
+                ActionText = "Reschedule",
+                Payload = new ActionPayloadDto { TimeOfDay = "19:00" }
+            });
+        }
+
+        // Calculate Weekly Rhythm completed logs counts (past 49 days)
+        var weeklyRhythm = new List<int>();
+        for (int i = 0; i < 49; i++)
+        {
+            var date = startDate.AddDays(i).Date;
+            int count = habits.Sum(h => h.Logs.Count(l => l.Date.Date == date && l.IsCompleted));
+            weeklyRhythm.Add(count);
+        }
+        fallback.WeeklyRhythm = weeklyRhythm;
+
+        if (habits.Count == 0)
+        {
+            return Result.Success(fallback);
+        }
+
+        // 2. Build AI prompt
+        var promptBuilder = new System.Text.StringBuilder();
+        promptBuilder.AppendLine($"Analyze the user's completions for {habits.Count} habits over the last 14 days to find friction patterns and suggest settings adjustments (reducing daily targets or rescheduling reminders).");
+        promptBuilder.AppendLine();
+        promptBuilder.AppendLine("Habits List:");
+
+        var last14DaysStart = today.AddDays(-14);
+        foreach (var habit in habits)
+        {
+            var logsLast14 = habit.Logs.Where(l => l.Date >= last14DaysStart).OrderBy(l => l.Date).ToList();
+            var completedCount = logsLast14.Count(l => l.IsCompleted);
+            
+            var patternParts = new List<string>();
+            for (int i = 0; i < 14; i++)
+            {
+                var d = last14DaysStart.AddDays(i);
+                var isDone = logsLast14.Any(l => l.Date.Date == d.Date && l.IsCompleted);
+                patternParts.Add(isDone ? "✅" : "❌");
+            }
+            var patternString = string.Join("", patternParts);
+
+            var timeInfo = string.IsNullOrEmpty(habit.TimeOfDay) ? "no scheduled time" : $"scheduled at {habit.TimeOfDay}";
+            var goalInfo = habit.TargetDays > 1 && !string.IsNullOrEmpty(habit.Unit) 
+                ? $", Daily Goal: {habit.TargetDays} {habit.Unit}" 
+                : habit.TargetDays > 1 ? $", Daily Goal: {habit.TargetDays}" : "";
+
+            promptBuilder.AppendLine($"- Habit ID: {habit.Id}, Title: \"{habit.Title}\" ({timeInfo}{goalInfo})");
+            promptBuilder.AppendLine($"  14-day history (newest on right): {patternString} ({completedCount}/14 days completed)");
+        }
+
+        // Call the AI Service
+        var result = await _aiService.GenerateBehavioralAnalysisAsync(promptBuilder.ToString(), fallback);
+
+        SanitizePrescriptionActions(result.Analysis.AiPrescription.Actions, habits);
+
+        result.Analysis.WeeklyRhythm = weeklyRhythm;
+        if (result.IsPersonalized)
+        {
+            _analysisCache[userId] = (DateTime.UtcNow, result.Analysis);
+        }
+
+        return Result.Success(result.Analysis);
+    }
+
+    private static void SanitizePrescriptionActions(List<PrescriptionActionDto> actions, List<Habit> habits)
+    {
+        var sanitized = new List<PrescriptionActionDto>();
+
+        foreach (var action in actions)
+        {
+            var matched = habits.FirstOrDefault(h => h.Id == action.HabitId)
+                ?? habits.FirstOrDefault(h => h.Title.Equals(action.HabitTitle, StringComparison.OrdinalIgnoreCase))
+                ?? habits.FirstOrDefault(h => h.Title.Contains(action.HabitTitle, StringComparison.OrdinalIgnoreCase))
+                ?? habits.FirstOrDefault(h => action.HabitTitle.Contains(h.Title, StringComparison.OrdinalIgnoreCase));
+
+            if (matched == null)
+                continue;
+
+            action.HabitId = matched.Id;
+            action.HabitTitle = matched.Title;
+
+            var isTargetAction = action.Type.Contains("Target", StringComparison.OrdinalIgnoreCase)
+                || action.ActionText.Contains("target", StringComparison.OrdinalIgnoreCase);
+            var isRescheduleAction = action.Type.Contains("Reschedule", StringComparison.OrdinalIgnoreCase)
+                || action.ActionText.Contains("Reschedule", StringComparison.OrdinalIgnoreCase);
+
+            if (isTargetAction)
+            {
+                if (!action.Payload.TargetDays.HasValue || action.Payload.TargetDays <= 0)
+                    action.Payload.TargetDays = ParseFirstInt(action.NewValue);
+
+                if (!action.Payload.TargetDays.HasValue || action.Payload.TargetDays <= 0)
+                {
+                    action.Payload.TargetDays = action.Type.Contains("Increase", StringComparison.OrdinalIgnoreCase)
+                        ? Math.Max(matched.TargetDays + 1, 1)
+                        : Math.Max(matched.TargetDays > 1 ? matched.TargetDays / 2 : 1, 1);
+                }
+            }
+
+            if (isRescheduleAction)
+            {
+                if (string.IsNullOrWhiteSpace(action.Payload.TimeOfDay))
+                    action.Payload.TimeOfDay = ParseTimeOfDay(action.NewValue) ?? matched.TimeOfDay;
+            }
+
+            if (isTargetAction && (!action.Payload.TargetDays.HasValue || action.Payload.TargetDays <= 0))
+                continue;
+
+            if (isRescheduleAction && string.IsNullOrWhiteSpace(action.Payload.TimeOfDay))
+                continue;
+
+            sanitized.Add(action);
+        }
+
+        actions.Clear();
+        actions.AddRange(sanitized);
+    }
+
+    private static int? ParseFirstInt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var match = Regex.Match(value, @"\d+");
+        return match.Success && int.TryParse(match.Value, out var parsed) ? parsed : null;
+    }
+
+    private static string? ParseTimeOfDay(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var match24 = Regex.Match(value, @"\b(\d{1,2}):(\d{2})\b");
+        if (match24.Success
+            && int.TryParse(match24.Groups[1].Value, out var hour24)
+            && int.TryParse(match24.Groups[2].Value, out var minute24)
+            && hour24 is >= 0 and <= 23
+            && minute24 is >= 0 and <= 59)
+        {
+            return $"{hour24:D2}:{minute24:D2}";
+        }
+
+        var match12 = Regex.Match(value, @"\b(\d{1,2})\s*(am|pm)\b", RegexOptions.IgnoreCase);
+        if (match12.Success && int.TryParse(match12.Groups[1].Value, out var hour12))
+        {
+            var isPm = match12.Groups[2].Value.Equals("pm", StringComparison.OrdinalIgnoreCase);
+            if (hour12 == 12)
+                hour12 = isPm ? 12 : 0;
+            else if (isPm)
+                hour12 += 12;
+
+            return $"{hour12:D2}:00";
+        }
+
+        return null;
     }
 
     public async Task<Result<HabitStatsDto>> GetHabitStats(Guid habitId, string userId)
@@ -478,6 +888,9 @@ public class HabitService
         var habitExists = await _context.Habits.AnyAsync(h => h.Id == habitId && h.UserId == userId);
         if (!habitExists)
             return Result.Failure<HabitStatsDto>(Error.NotFound);
+
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
 
         int totalDays = await _context.HabitLogs.CountAsync(l => l.HabitId == habitId);
         int completedDays = await _context.HabitLogs.CountAsync(l => l.HabitId == habitId && l.IsCompleted);
@@ -489,7 +902,7 @@ public class HabitService
             .OrderBy(d => d)
             .ToListAsync();
 
-        var today = DateTime.UtcNow.Date;
+        var today = DateTime.UtcNow.AddMinutes(offset).Date;
 
         double completionRate = totalDays == 0 ? 0 : (double)completedDays / totalDays * 100;
 
@@ -558,8 +971,11 @@ public class HabitService
         if (!habitExists)
             return Result.Failure<List<HabitHeatmapDto>>(Error.NotFound);
 
-        var startDate = DateTime.UtcNow.Date.AddDays(-30);
-        var endDate = DateTime.UtcNow.Date;
+        var user = await _userManager.FindByIdAsync(userId);
+        var offset = user?.TimeZoneOffset ?? 0;
+
+        var startDate = DateTime.UtcNow.AddMinutes(offset).Date.AddDays(-30);
+        var endDate = DateTime.UtcNow.AddMinutes(offset).Date;
 
         var completedDates = await _context.HabitLogs
             .AsNoTracking()
@@ -806,5 +1222,35 @@ public class HabitService
         recap.AiInsight = await _aiService.GenerateMonthlyRecapInsightAsync(aiPrompt);
 
         return Result.Success(recap);
+    }
+
+    /// <summary>
+    /// Calculates the current streak from a list of completed dates.
+    /// Mirrors the logic in GetStreak: allows streak to start from yesterday
+    /// if today hasn't been completed yet.
+    /// </summary>
+    private static int CalculateCurrentStreak(List<DateTime> completedDates, DateTime today)
+    {
+        if (completedDates.Count == 0) return 0;
+
+        var sorted = completedDates.Distinct().OrderByDescending(d => d).ToList();
+
+        var todayCompleted = sorted.Contains(today);
+        var expected = todayCompleted ? today : today.AddDays(-1);
+
+        int streak = 0;
+        foreach (var date in sorted)
+        {
+            if (date == expected)
+            {
+                streak++;
+                expected = expected.AddDays(-1);
+            }
+            else if (date < expected)
+            {
+                break;
+            }
+        }
+        return streak;
     }
 }

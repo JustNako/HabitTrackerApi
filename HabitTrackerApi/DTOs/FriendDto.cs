@@ -25,3 +25,10 @@ public class FriendRequestDto
     public string RequesterName { get; set; } = string.Empty;
     public DateTime SentAt { get; set; }
 }
+
+public class SuggestedUserDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public bool IsPro { get; set; }
+}

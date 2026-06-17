@@ -30,4 +30,6 @@ public class GlobalStatsDto
 
     public List<MonthlyProgressDto> MonthlyProgress { get; set; } = new();
     public List<WeeklyProgressDto> WeeklyCompletionRate { get; set; } = new();
+    public List<int> CurrentWeekCompletions { get; set; } = new();
+    public List<int> Last30DaysCompletions { get; set; } = new();
 }

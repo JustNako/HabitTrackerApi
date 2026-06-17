@@ -20,4 +20,6 @@ public class HabitDto
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
     public bool IsCompletedToday { get; set; }
     public bool IsPublic { get; set; }
+    public int CurrentStreak { get; set; }
+    public int CompletionRate30Day { get; set; }
 }

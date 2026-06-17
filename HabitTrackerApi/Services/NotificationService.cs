@@ -34,10 +34,17 @@ public class NotificationService
             payloadData["title"] = title;
             payloadData["body"] = body;
 
+            var isReminder = data != null && data.TryGetValue("type", out var type) && type == "reminder";
+
             var message = new Message
             {
                 Token = fcmToken,
                 Data = payloadData,
+                Notification = isReminder ? null : new Notification
+                {
+                    Title = title,
+                    Body = body
+                },
                 Apns = new ApnsConfig
                 {
                     Aps = new Aps
