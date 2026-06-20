@@ -68,7 +68,7 @@ public class HabitsController : ControllerBase
         if (result.IsFailure)
             return BadRequest(new { error = result.Error });
 
-        return Ok();
+        return Ok(result.Value);
     }
 
 

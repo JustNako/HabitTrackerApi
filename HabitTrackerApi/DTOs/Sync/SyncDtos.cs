@@ -24,7 +24,7 @@ public class SyncPushRequest
 
 public class SyncHabitDto
 {
-    public Guid Id { get; set; }
+    public Guid? Id { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public string? Notes { get; set; }
@@ -44,7 +44,7 @@ public class SyncHabitDto
 
 public class SyncHabitLogDto
 {
-    public Guid Id { get; set; }
+    public Guid? Id { get; set; }
     public Guid HabitId { get; set; }
     public DateTime Date { get; set; }
     public bool IsCompleted { get; set; }

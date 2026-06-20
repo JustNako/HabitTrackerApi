@@ -73,14 +73,19 @@ public class SyncService
 
     public async Task<Result> PushAsync(string userId, SyncPushRequest request)
     {
-        var habitIds = request.Habits.Select(h => h.Id).ToList();
+        var habitIds = request.Habits
+            .Where(h => h.Id.HasValue)
+            .Select(h => h.Id.Value)
+            .ToList();
+
         var existingHabits = await _context.Habits.IgnoreQueryFilters()
             .Where(h => h.UserId == userId && habitIds.Contains(h.Id))
             .ToDictionaryAsync(h => h.Id);
 
         foreach (var syncHabit in request.Habits)
         {
-            if (existingHabits.TryGetValue(syncHabit.Id, out var existingHabit))
+            var habitId = syncHabit.Id ?? Guid.NewGuid();
+            if (syncHabit.Id.HasValue && existingHabits.TryGetValue(syncHabit.Id.Value, out var existingHabit))
             {
                 if (syncHabit.UpdatedAt > existingHabit.UpdatedAt)
                 {
@@ -105,7 +110,7 @@ public class SyncService
             {
                 var newHabit = new Habit
                 {
-                    Id = syncHabit.Id,
+                    Id = habitId,
                     UserId = userId,
                     Title = syncHabit.Title,
                     Description = syncHabit.Description,
@@ -127,7 +132,11 @@ public class SyncService
             }
         }
 
-        var logIds = request.HabitLogs.Select(l => l.Id).ToList();
+        var logIds = request.HabitLogs
+            .Where(l => l.Id.HasValue)
+            .Select(l => l.Id.Value)
+            .ToList();
+
         var existingLogs = await _context.HabitLogs.IgnoreQueryFilters()
             .Where(l => l.Habit.UserId == userId && logIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id);
@@ -138,11 +147,17 @@ public class SyncService
             .Select(h => h.Id)
             .ToListAsync();
         var habitIdSet = new HashSet<Guid>(habitsInDb);
-        var newHabitIdsInRequest = new HashSet<Guid>(request.Habits.Select(h => h.Id));
+        
+        var newHabitIdsInRequest = new HashSet<Guid>(
+            request.Habits
+                .Where(h => h.Id.HasValue)
+                .Select(h => h.Id.Value)
+        );
 
         foreach (var syncLog in request.HabitLogs)
         {
-            if (existingLogs.TryGetValue(syncLog.Id, out var existingLog))
+            var logId = syncLog.Id ?? Guid.NewGuid();
+            if (syncLog.Id.HasValue && existingLogs.TryGetValue(syncLog.Id.Value, out var existingLog))
             {
                 if (syncLog.UpdatedAt > existingLog.UpdatedAt)
                 {
@@ -163,7 +178,7 @@ public class SyncService
                 {
                     var newLog = new HabitLog
                     {
-                        Id = syncLog.Id,
+                        Id = logId,
                         HabitId = syncLog.HabitId,
                         Date = syncLog.Date,
                         IsCompleted = syncLog.IsCompleted,

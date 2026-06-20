@@ -72,12 +72,12 @@ public class HabitService
 
     private const int FreeHabitLimit = 10;
 
-    public async Task<Result> CreateHabit(string userId, CreateHabitDto dto)
+    public async Task<Result<HabitDto>> CreateHabit(string userId, CreateHabitDto dto)
     {
         var user = await SyncProStatusAndGetUser(userId);
         var validationResult = ValidateRepeatSettings(dto);
         if (validationResult.IsFailure)
-            return validationResult;
+            return Result.Failure<HabitDto>(validationResult.Error);
 
         // ── Pro tier check ─────────────────────────────────────────────────
         bool isCurrentlyPro = user != null && user.IsPro && (user.ProExpiration == null || user.ProExpiration > DateTime.UtcNow);
@@ -86,7 +86,7 @@ public class HabitService
         {
             var existingCount = await _context.Habits.CountAsync(h => h.UserId == userId && !h.IsDeleted);
             if (existingCount >= FreeHabitLimit)
-                return Result.Failure(new Error("ProRequired", $"Free plan is limited to {FreeHabitLimit} habits. Upgrade to Pro to add more."));
+                return Result.Failure<HabitDto>(new Error("ProRequired", $"Free plan is limited to {FreeHabitLimit} habits. Upgrade to Pro to add more."));
         }
 
         var habit = new Habit
@@ -116,7 +116,28 @@ public class HabitService
         _insightsCache.TryRemove(userId, out _);
         _analysisCache.TryRemove(userId, out _);
 
-        return Result.Success();
+        var habitDto = new HabitDto
+        {
+            Id = habit.Id,
+            Title = habit.Title,
+            Description = habit.Description,
+            Notes = habit.Notes,
+            TargetDays = habit.TargetDays,
+            CompletedDays = 0,
+            RepeatType = habit.RepeatType,
+            RepeatDaysOfWeek = ParseDayOfWeekCsv(habit.RepeatDaysOfWeek),
+            RepeatDaysOfMonth = ParseIntCsv(habit.RepeatDaysOfMonth),
+            RepeatTimesPerPeriod = habit.RepeatTimesPerPeriod,
+            RepeatPeriod = habit.RepeatPeriod,
+            IsCompletedToday = false,
+            IsPublic = habit.IsPublic,
+            Unit = habit.Unit,
+            TimeOfDay = habit.TimeOfDay,
+            CurrentStreak = 0,
+            CompletionRate30Day = 0
+        };
+
+        return Result.Success(habitDto);
     }
 
     public async Task<Result> UpdateHabitNotes(Guid id, string userId, string? notes)
@@ -280,7 +301,7 @@ public class HabitService
             .AsNoTracking()
             .Where(l => l.HabitId == habitId && l.IsCompleted)
             .OrderByDescending(l => l.Date)
-            .Select(l => l.Date)
+            .Select(l => l.Date.Date)
             .ToListAsync();
 
         int streak = 0;
@@ -350,20 +371,28 @@ public class HabitService
     {
         var user = await SyncProStatusAndGetUser(userId);
         var offset = user?.TimeZoneOffset ?? 0;
+        var dateToday = DateTime.UtcNow.AddMinutes(offset).Date;
         
         int totalHabits = await _context.Habits.CountAsync(h => h.UserId == userId);
-        int totalCompletions = await _context.HabitLogs.CountAsync(l => l.Habit.UserId == userId && l.IsCompleted);
         int globalStreak = (await GetGlobalStreak(userId)).Value;
 
-        // Fetch minimal data for calculations
+        // Fetch minimal data for calculations (distinct by habit and date)
         var completedDatesByHabit = await _context.HabitLogs
             .AsNoTracking()
             .Where(l => l.Habit.UserId == userId && l.IsCompleted)
-            .Select(l => new { l.HabitId, l.Date })
+            .Select(l => new { l.HabitId, Date = l.Date.Date })
+            .Distinct()
             .ToListAsync();
 
-        // Completion Rate (simple % of completions per habit)
-        double completionRate = totalHabits == 0 ? 0 : Math.Round((double)totalCompletions / totalHabits, 2);
+        int totalCompletions = completedDatesByHabit.Count;
+
+        // Completion Rate (last 30 days percentage to match offline logic)
+        var thirtyDaysAgo = dateToday.AddDays(-29);
+        int completionsLast30 = completedDatesByHabit.Count(l => l.Date.Date >= thirtyDaysAgo && l.Date.Date <= dateToday);
+        int possibleCompletionsLast30 = totalHabits * 30;
+        double completionRate = possibleCompletionsLast30 == 0 
+            ? 0 
+            : Math.Min(100.0, Math.Round((double)completionsLast30 / possibleCompletionsLast30 * 100, 1));
 
         // Active Days – distinct dates with any completed habit
         int activeDays = completedDatesByHabit.Select(l => l.Date.Date).Distinct().Count();
@@ -467,7 +496,6 @@ public class HabitService
         }
 
         var last30DaysCompletions = new List<int>();
-        var dateToday = DateTime.UtcNow.AddMinutes(offset).Date;
         for (int i = 23; i >= 0; i--) // The app expects 24 bars for the non-weekly graph based on _buildArtisticBarChart
         {
             var date = dateToday.AddDays(-i);
@@ -898,7 +926,7 @@ public class HabitService
         var completedDates = await _context.HabitLogs
             .AsNoTracking()
             .Where(l => l.HabitId == habitId && l.IsCompleted)
-            .Select(l => l.Date)
+            .Select(l => l.Date.Date)
             .OrderBy(d => d)
             .ToListAsync();
 
@@ -980,7 +1008,7 @@ public class HabitService
         var completedDates = await _context.HabitLogs
             .AsNoTracking()
             .Where(l => l.HabitId == habitId && l.Date >= startDate && l.Date <= endDate && l.IsCompleted)
-            .Select(l => l.Date)
+            .Select(l => l.Date.Date)
             .ToListAsync();
 
         var result = new List<HabitHeatmapDto>();
