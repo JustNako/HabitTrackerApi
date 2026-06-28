@@ -19,4 +19,5 @@ public class CreateHabitDto
     public int? RepeatTimesPerPeriod { get; set; }
     public HabitRepeatPeriod? RepeatPeriod { get; set; }
     public bool IsPublic { get; set; } = true;
+    public int IconIndex { get; set; } = 0;
 }

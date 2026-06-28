@@ -63,7 +63,8 @@ public class HabitService
                 CurrentStreak = CalculateCurrentStreak(
                     h.Logs.Where(l => l.IsCompleted).Select(l => l.Date.Date).ToList(),
                     todayLocal),
-                CompletionRate30Day = rate
+                CompletionRate30Day = rate,
+                IconIndex = h.IconIndex
             };
         }).ToList();
 
@@ -104,7 +105,8 @@ public class HabitService
             IsPublic = dto.IsPublic,
             UserId = userId,
             Unit = dto.Unit,
-            TimeOfDay = dto.TimeOfDay
+            TimeOfDay = dto.TimeOfDay,
+            IconIndex = dto.IconIndex
         };
 
         await _repo.Add(habit);
@@ -134,7 +136,8 @@ public class HabitService
             Unit = habit.Unit,
             TimeOfDay = habit.TimeOfDay,
             CurrentStreak = 0,
-            CompletionRate30Day = 0
+            CompletionRate30Day = 0,
+            IconIndex = habit.IconIndex
         };
 
         return Result.Success(habitDto);

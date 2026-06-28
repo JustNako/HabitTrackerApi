@@ -40,6 +40,7 @@ public class SyncHabitDto
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
     public bool IsPublic { get; set; }
+    public int IconIndex { get; set; } = 0;
 }
 
 public class SyncHabitLogDto

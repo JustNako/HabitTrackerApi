@@ -166,4 +166,81 @@ public class EmailService
             throw;
         }
     }
+
+    public async Task SendUpdateNotificationEmailAsync(string toEmail, string userName, string version, string releaseNotes)
+    {
+        var emailSection = _config.GetSection("Email");
+        var from = emailSection["From"] ?? "no-reply@flowtracks.app";
+        var smtpHost = emailSection["SmtpHost"] ?? "smtp.resend.com";
+        var smtpPort = int.Parse(emailSection["SmtpPort"] ?? "587");
+        var username = emailSection["Username"] ?? "resend";
+        var password = emailSection["Password"]!;
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Flow", from));
+        message.To.Add(new MailboxAddress(userName, toEmail));
+        message.Subject = $"Flow v{version} is now live!";
+
+        var bodyBuilder = new BodyBuilder
+        {
+            HtmlBody = $$"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #121212; margin: 0; padding: 40px 20px; }
+                    .card { max-width: 480px; margin: 0 auto; background: #1A1A1A; border-radius: 32px; padding: 48px 40px; border: 1px solid #2A2A2A; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+                    .logo { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 500; color: #E8EBE9; letter-spacing: 0.5px; }
+                    .title { text-align: center; font-family: 'Lora', 'Playfair Display', Georgia, serif; color: #F5F5F5; font-size: 24px; font-weight: 400; margin: 24px 0 16px; }
+                    .version-badge { display: inline-block; background: rgba(150, 176, 160, 0.15); color: #96B0A0; border: 1px solid rgba(150, 176, 160, 0.3); padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+                    .badge-container { text-align: center; }
+                    .content { color: #E2E8F0; font-size: 15px; font-weight: 300; line-height: 1.6; margin-bottom: 30px; text-align: left; }
+                    .release-notes { background: #151515; border: 1px solid #252525; padding: 20px; border-radius: 20px; color: #CBD5E1; font-size: 14px; line-height: 1.6; margin-bottom: 30px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+                    .button { display: inline-block; background: #96B0A0; color: #151515; text-decoration: none; text-align: center; padding: 16px 36px; border-radius: 40px; font-size: 16px; font-weight: 500; margin: 0 auto; width: max-content; }
+                    .button-container { text-align: center; }
+                    .footer { text-align: center; color: #6B7280; font-size: 12px; font-weight: 300; margin-top: 40px; line-height: 1.5; }
+                  </style>
+                </head>
+                <body>
+                  <div class="card">
+                    <div class="logo">Flow</div>
+                    <div class="title">A new update is here</div>
+                    <div class="badge-container">
+                      <div class="version-badge">Version {{version}}</div>
+                    </div>
+                    <div class="content">
+                      Hello {{userName}},<br><br>
+                      We've polished Flow to make your habit tracking journey even smoother. Here's what's new in this version:
+                    </div>
+                    <div class="release-notes">{{releaseNotes}}</div>
+                    <div class="button-container">
+                      <a href="https://flowtracks.app" class="button">Open Flow</a>
+                    </div>
+                    <div class="footer">
+                      Thank you for growing with us.<br>
+                      You are receiving this because you registered at Flow.
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """
+        };
+
+        message.Body = bodyBuilder.ToMessageBody();
+
+        try
+        {
+            using var client = new SmtpClient();
+            await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(username, password);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+            _logger.LogInformation("Update notification email sent to {Email}", toEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send update email to {Email}", toEmail);
+        }
+    }
 }

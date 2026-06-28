@@ -22,4 +22,5 @@ public class HabitDto
     public bool IsPublic { get; set; }
     public int CurrentStreak { get; set; }
     public int CompletionRate30Day { get; set; }
+    public int IconIndex { get; set; }
 }
